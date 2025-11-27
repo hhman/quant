@@ -1,11 +1,14 @@
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
-from typing import List
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import qlib
 from qlib.constant import REG_CN
 from qlib.data import D
+from qlib.contrib.eva.alpha import calc_ic, calc_long_short_return
+from qlib.contrib.report.analysis_model.analysis_model_performance import model_performance_graph
 
 
 market = "csi300"
@@ -152,6 +155,68 @@ def universal_neutralization(
     return group
 
 
+def summarize_ic(
+    pred: pd.Series,
+    label: pd.Series,
+    *,
+    date_col: str = "datetime",
+    dropna: bool = True,
+) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """
+    计算 IC / Rank IC 序列及其统计指标。
+
+    返回: ic 序列, ric 序列, ic 汇总, ric 汇总
+    """
+    ic, ric = calc_ic(pred, label, date_col=date_col, dropna=dropna)
+
+    def _summary(series: pd.Series) -> pd.Series:
+        s = pd.Series(series).dropna()
+        if s.empty:
+            return pd.Series(dtype=float)
+        mean = s.mean()
+        std = s.std()
+        icir = mean / std if std != 0 else np.nan
+        t_value = icir * np.sqrt(len(s)) if std != 0 else np.nan
+        win_rate = (s > 0).sum() / len(s)
+        return pd.Series(
+            {
+                "mean": mean,
+                "std": std,
+                "icir": icir,
+                "t_value": t_value,
+                "win_rate": win_rate,
+                "count": len(s),
+            }
+        )
+
+    ic_summary = _summary(ic)
+    ric_summary = _summary(ric)
+    return ic, ric, ic_summary, ric_summary
+
+
+def summarize_group_return(pred_label: pd.DataFrame, *, quantile: float = 0.2) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """封装分组收益与多空收益的计算，返回日度序列与摘要表。"""
+    long_short, long_avg = calc_long_short_return(pred_label["score"], pred_label["label"], quantile=quantile)
+    daily = pd.DataFrame({"long_short": long_short, "long_avg": long_avg})
+
+    def _summary(series: pd.Series) -> pd.Series:
+        s = series.dropna()
+        if s.empty:
+            return pd.Series(dtype=float)
+        return pd.Series(
+            {
+                "mean": s.mean(),
+                "std": s.std(),
+                "cum_return": s.sum(),
+                "win_rate": (s > 0).sum() / len(s),
+                "count": len(s),
+            }
+        )
+
+    summary = pd.DataFrame({col: _summary(daily[col]) for col in daily.columns}).T
+    return daily, summary
+
+
 if __name__ == "__main__":
     provider_uri = "/Users/hm/Desktop/workspace/output/qlib_data"
     qlib.init(provider_uri=provider_uri, region=REG_CN)
@@ -172,4 +237,31 @@ if __name__ == "__main__":
     # 中性化
     df = df.groupby(level="datetime", group_keys=False).apply(lambda x: universal_neutralization(x, ["qtul5", "ret_1d"], ["log_mv"], ["industry"]))
 
-    print(df)
+    # 构造评分/标签
+    pred_label = df[["qtul5", "ret_1d"]].rename(columns={"qtul5": "score", "ret_1d": "label"})
+
+    # 因子评估：IC、Rank IC 及 ICIR 等衍生指标
+    ic, ric, ic_summary, ric_summary = summarize_ic(
+        pred_label["score"], pred_label["label"], date_col="datetime", dropna=True
+    )
+
+    # 分组收益：日度序列与摘要
+    group_daily, group_summary = summarize_group_return(pred_label, quantile=0.2)
+
+    # 统一生成全量性能图（交互式）
+    graph_names = ["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
+    output_dir = Path("output/qtul5")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for name in graph_names:
+        figs = model_performance_graph(pred_label, graph_names=[name], show_notebook=False)
+        for j, fig in enumerate(figs, start=1):
+            filename = f"{name}.html" if len(figs) == 1 else f"{name}_{j}.html"
+            fig.write_html(str(output_dir / filename))
+
+    print("IC 摘要：")
+    print(ic_summary)
+    print("Rank IC 摘要：")
+    print(ric_summary)
+    print("分组收益（多空/多头）摘要：")
+    print(group_summary)
+    print("性能图已保存至目录:", (output_dir).resolve())
