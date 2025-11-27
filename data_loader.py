@@ -276,14 +276,15 @@ class CSVDataLoader:
 
 
     def _compute_adjust_factor(self, df: pd.DataFrame) -> pd.Series:
-        """基于前收/昨日收盘计算复权因子。"""
+        """基于前收/昨日收盘计算复权因子（后复权）。"""
         close = df["收盘价"]
         prev_close = df["前收盘价"]
         prev_close_shift = close.shift(1)
 
         ratio = pd.Series(1.0, index=df.index)
-        valid_mask = prev_close.notna() & prev_close_shift.notna() & (prev_close_shift != 0)
-        ratio.loc[valid_mask] = (prev_close[valid_mask] / prev_close_shift[valid_mask]).astype(float)
+        valid_mask = prev_close.notna() & prev_close_shift.notna() & (prev_close != 0)
+        # 后复权：使用昨日收盘/当日前收的倒数，未来价格被向过去基准上推。
+        ratio.loc[valid_mask] = (prev_close_shift[valid_mask] / prev_close[valid_mask]).astype(float)
         ratio.iloc[0] = 1.0
         return ratio.cumprod()
 
