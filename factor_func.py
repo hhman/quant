@@ -1,0 +1,170 @@
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+from qlib.contrib.eva.alpha import calc_ic, calc_long_short_return
+from qlib.contrib.report.analysis_model.analysis_model_performance import model_performance_graph
+
+
+def ext_out_mad(group: pd.DataFrame, factor_list: list) -> pd.DataFrame:
+    """
+    Median absolute deviation outlier removal.
+    """
+    for f in factor_list:
+        factor = group[f]
+        median = factor.median()
+        mad = (factor - median).abs().median()
+        edge_up = median + 3 * mad
+        edge_low = median - 3 * mad
+        factor = factor.astype("float64")
+        factor.clip(lower=edge_low, upper=edge_up, inplace=True)
+        group[f] = factor.astype("float32")
+    return group
+
+
+def ext_out_3std(group: pd.DataFrame, factor_list: list, noise_std: float = 1e-10) -> pd.DataFrame:
+    """
+    3-sigma 异常值移除并添加噪音确保唯一的分箱边界。
+    """
+    for f in factor_list:
+        factor = group[f]
+        noise = np.random.normal(0, noise_std, size=len(factor))
+        factor += noise
+        factor = factor.astype(float)
+        edge_up = factor.mean() + 3 * factor.std()
+        edge_low = factor.mean() - 3 * factor.std()
+        factor.clip(lower=edge_low, upper=edge_up, inplace=True)
+        group[f] = factor
+    return group
+
+
+def z_score(group: pd.DataFrame, factor_list: list) -> pd.DataFrame:
+    """
+    Z-score standardization.
+    """
+    for f in factor_list:
+        factor = group[f]
+        if factor.std() != 0:
+            group[f] = (factor - factor.mean()) / factor.std()
+        else:
+            group[f] = np.nan
+    return group
+
+
+def universal_neutralization(
+    group: pd.DataFrame,
+    factors: Optional[List[str]],
+    returns: Optional[List[str]],
+    continuous_styles: List[str],
+    categorical_styles: List[str],
+) -> pd.DataFrame:
+    """
+    【单日截面】通用中性化函数：通过一次多元线性回归，同时剥离连续和分类风格的影响。
+    """
+    targets = list(factors or []) + list(returns or [])
+    if not targets:
+        return group
+
+    X_continuous = group[continuous_styles].astype("float64")
+
+    X_dummies = pd.DataFrame(index=group.index)
+    for col in categorical_styles:
+        dummies = pd.get_dummies(group[col], drop_first=True, prefix=col, dtype=float)
+        X_dummies = pd.concat([X_dummies, dummies], axis=1)
+
+    X_styles = pd.concat([X_continuous, X_dummies], axis=1)
+
+    reg_data = pd.concat([group[targets].astype("float64"), X_styles], axis=1).dropna()
+    if len(reg_data) < len(X_styles.columns) + 2:
+        return group
+
+    X_reg = reg_data[X_styles.columns]
+    X_reg = sm.add_constant(X_reg, has_constant="add")
+
+    for col in targets:
+        Y_reg = reg_data[col]
+        try:
+            model = sm.OLS(Y_reg, X_reg).fit()
+            residual = model.resid.astype(group[col].dtype, copy=False)
+            group.loc[residual.index, col] = residual
+        except Exception:
+            print(f"忽略 {col} 的回归失败（如数据共线性、奇异矩阵等），保留原值")
+            continue
+
+    return group
+
+
+def summarize_ic(
+    pred: pd.Series,
+    label: pd.Series,
+    *,
+    date_col: str = "datetime",
+    dropna: bool = True,
+) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """计算 IC / Rank IC 序列及其统计指标。"""
+    ic, ric = calc_ic(pred, label, date_col=date_col, dropna=dropna)
+
+    def _summary(series: pd.Series) -> pd.Series:
+        s = pd.Series(series).dropna()
+        if s.empty:
+            return pd.Series(dtype=float)
+        mean = s.mean()
+        std = s.std()
+        icir = mean / std if std != 0 else np.nan
+        t_value = icir * np.sqrt(len(s)) if std != 0 else np.nan
+        win_rate = (s > 0).sum() / len(s)
+        return pd.Series(
+            {
+                "mean": mean,
+                "std": std,
+                "icir": icir,
+                "t_value": t_value,
+                "win_rate": win_rate,
+                "count": len(s),
+            }
+        )
+
+    ic_summary = _summary(ic)
+    ric_summary = _summary(ric)
+    return ic, ric, ic_summary, ric_summary
+
+
+def summarize_group_return(pred_label: pd.DataFrame, *, quantile: float = 0.2) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """封装分组收益与多空收益的计算，返回日度序列与摘要表。"""
+    long_short, long_avg = calc_long_short_return(pred_label["score"], pred_label["label"], quantile=quantile)
+    daily = pd.DataFrame({"long_short": long_short, "long_avg": long_avg})
+
+    def _summary(series: pd.Series) -> pd.Series:
+        s = series.dropna()
+        if s.empty:
+            return pd.Series(dtype=float)
+        return pd.Series(
+            {
+                "mean": s.mean(),
+                "std": s.std(),
+                "cum_return": s.sum(),
+                "win_rate": (s > 0).sum() / len(s),
+                "count": len(s),
+            }
+        )
+
+    summary = pd.DataFrame({col: _summary(daily[col]) for col in daily.columns}).T
+    return daily, summary
+
+
+def save_performance_graphs(
+    pred_label: pd.DataFrame,
+    output_dir: Path,
+    graph_names: Optional[List[str]] = None,
+) -> None:
+    """生成性能图并保存为 html 文件。"""
+    names = graph_names or ["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        figs = model_performance_graph(pred_label, graph_names=[name], show_notebook=False)
+        for j, fig in enumerate(figs, start=1):
+            filename = f"{name}.html" if len(figs) == 1 else f"{name}_{j}.html"
+            fig.write_html(str(out_dir / filename))
