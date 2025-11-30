@@ -2,10 +2,19 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 from qlib.contrib.eva.alpha import calc_ic, calc_long_short_return, pred_autocorr
 from qlib.contrib.report.analysis_model.analysis_model_performance import model_performance_graph
+from qlib.contrib.evaluate import risk_analysis
+from qlib.contrib.report.analysis_position import (
+    report_graph,
+    risk_analysis_graph,
+    score_ic_graph
+)
+from qlib.contrib.strategy import TopkDropoutStrategy
+from qlib.backtest.executor import SimulatorExecutor
+from qlib.backtest import backtest
 
 
 def ext_out_mad(group: pd.DataFrame, factor_list: list) -> pd.DataFrame:
@@ -211,3 +220,86 @@ def save_performance_graphs(
         for j, fig in enumerate(figs, start=1):
             filename = f"{name}.html" if len(figs) == 1 else f"{name}_{j}.html"
             fig.write_html(str(out_dir / filename))
+    figs = score_ic_graph(pred_label, show_notebook=False)
+    for i, fig in enumerate(figs, start=1):
+        name = "score_ic.html" if len(figs) == 1 else f"score_ic_{i}.html"
+        fig.write_html(str(output_dir / name))
+
+
+def run_backtest(
+    signal_series: pd.Series,
+    time_per_step: str,
+    output_dir: Path,
+) -> Tuple[Dict[str, Tuple[pd.DataFrame, dict]], Dict[str, Tuple[pd.DataFrame, object]]]:
+    """运行回测并将回测图表输出到指定目录。"""
+
+    # 检查索引
+    if signal_series.index.names != ["instrument", "datetime"]:
+        raise ValueError("signal_series 的索引必须为 (instrument, datetime) 的 MultiIndex")
+
+    # 转换与排序
+    signal_series = signal_series.swaplevel().sort_index()
+
+    # 时间范围
+    dt_index = signal_series.index.get_level_values("datetime")
+    start_time = dt_index.min().strftime("%Y-%m-%d")
+    backtest_end = (dt_index.max() - pd.Timedelta(days=40)).strftime("%Y-%m-%d")
+
+    # 策略
+    strategy = TopkDropoutStrategy(
+        signal=signal_series,
+        topk=50,
+        n_drop=5,
+    )
+
+    # 执行器
+    executor = SimulatorExecutor(
+        time_per_step=time_per_step,
+        generate_portfolio_metrics=True,
+    )
+
+    # 运行回测
+    portfolio_dict, indicator_dict = backtest(
+        start_time=start_time,
+        end_time=backtest_end,
+        strategy=strategy,
+        executor=executor,
+        benchmark="SH000300",
+        account=100_000_000,
+        exchange_kwargs={
+            "freq": "day",
+            "limit_threshold": 0.095,
+            "deal_price": "close",
+            "open_cost": 0.0005,
+            "close_cost": 0.0015,
+            "min_cost": 5,
+        },
+    )
+
+    # 保存回测图表
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    report_normal_df, positions_normal = portfolio_dict["1day"]
+    analysis = dict()
+    analysis["excess_return_without_cost"] = risk_analysis(
+        report_normal_df["return"] - report_normal_df["bench"], freq="day"
+    )
+    analysis["excess_return_with_cost"] = risk_analysis(
+        report_normal_df["return"] - report_normal_df["bench"] - report_normal_df["cost"], freq="day"
+    )
+    analysis_df = pd.concat(analysis)
+
+    # --- 1) report_graph ---
+    figs = report_graph(report_normal_df, show_notebook=False)
+    for i, fig in enumerate(figs, start=1):
+        name = "report_graph.html" if len(figs) == 1 else f"report_graph_{i}.html"
+        fig.write_html(str(output_dir / name))
+
+    # --- 2) risk_analysis_graph ---
+    figs = risk_analysis_graph(analysis_df, report_normal_df, show_notebook=False)
+    for i, fig in enumerate(figs, start=1):
+        name = "risk_analysis.html" if len(figs) == 1 else f"risk_analysis_{i}.html"
+        fig.write_html(str(output_dir / name))
+
+    return portfolio_dict, indicator_dict

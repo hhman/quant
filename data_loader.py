@@ -95,7 +95,7 @@ class CSVDataLoader:
         "close",
         "volume",
         "amount",
-        "industry_id",
+        "industry",
         "total_mv",
         "factor",
     )
@@ -116,7 +116,7 @@ class CSVDataLoader:
         self.output_dir = Path(output_dir)
         self.category_records: Dict[str, List[MembershipRecord]] = {}
         self.industry_mapping: Dict[str, int] = {}
-        self.next_industry_id = 1
+        self.next_industry = 1
         self.industry_mapping_file = self.output_dir / "industry_mapping.json"
         self.features_dir = "features"
         self.membership_dir = "instruments"
@@ -172,7 +172,7 @@ class CSVDataLoader:
             return None
         df = df.sort_values("date").drop_duplicates(subset="date", keep="last")
         df = df.set_index("date")
-        df["industry_id"] = 0
+        df["industry"] = 0
         df["total_mv"] = 0
         df["factor"] = 1.0
         symbol_value = str(df["symbol"].iloc[0]) if "symbol" in df.columns else csv_path.stem
@@ -245,7 +245,7 @@ class CSVDataLoader:
 
         self._collect_membership_categories(code, df)
         aligned_industry = industry_series.reindex(df.index).ffill().bfill()
-        df["industry_id"] = aligned_industry.map(self._map_industry_id)
+        df["industry"] = aligned_industry.map(self._map_industry)
 
         df = df.drop(columns=list(self.MEMBERSHIP_COLUMNS), errors="ignore")
         df = df.rename(columns=self.COLUMN_RENAME_MAP)
@@ -370,14 +370,14 @@ class CSVDataLoader:
         except (TypeError, ValueError):
             return 0
 
-    def _map_industry_id(self, value) -> int:
+    def _map_industry(self, value) -> int:
         """将行业名称映射为稳定的整数ID，空值返回0。"""
         if pd.isna(value) or value == "":
             return 0
         name = str(value).strip()
         if name not in self.industry_mapping:
-            self.industry_mapping[name] = self.next_industry_id
-            self.next_industry_id += 1
+            self.industry_mapping[name] = self.next_industry
+            self.next_industry += 1
         return self.industry_mapping[name]
 
     def _save_industry_mapping(self) -> None:
