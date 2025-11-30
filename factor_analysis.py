@@ -7,6 +7,8 @@ from factor_func import (
     universal_neutralization,
     summarize_ic,
     summarize_group_return,
+    summarize_autocorr,
+    summarize_turnover,
     save_performance_graphs,
 )
 
@@ -18,11 +20,12 @@ from qlib.data import D
 market = "csi300"
 start_time = "2020-01-01"
 end_time = "2024-12-31"
-period = [1, 2, 3, 4, 5]
+# 日/周/月对齐的持有期（按交易日约数）
+periods = {"1d": 1, "1w": 5, "1m": 20}
 
 # 映射：列名 -> 表达式
 factor_map = {"qtul5": "Quantile($close, 5, 0.8)/$close"}
-return_map = {f"ret_{x}d": f"Ref($close, -{x})/$close - {x}" for x in period}
+return_map = {f"ret_{label}": f"Ref($close, -{lag})/$close - 1" for label, lag in periods.items()}
 style_continuous_map = {"log_mv": "Log($total_mv)"}
 style_categorical_map = {"industry": "$industry_id"}
 
@@ -67,18 +70,22 @@ if __name__ == "__main__":
             # 构造评分/标签
             pred_label = df[[factor_col, return_col]].rename(columns={factor_col: "score", return_col: "label"})
 
-            # 因子评估：IC、Rank IC 及 ICIR 等衍生指标
+            # IC / Rank IC 及衍生统计
             ic, ric, ic_summary, ric_summary = summarize_ic(
                 pred_label["score"], pred_label["label"], date_col="datetime", dropna=True
             )
-
-            # 分组收益：日度序列与摘要
+            # 分组收益（多空、纯多头）
             group_daily, group_summary = summarize_group_return(pred_label, quantile=0.2)
+            # 信号自相关
+            ac_series, ac_summary = summarize_autocorr(pred_label["score"], lag=1)
+            # Top/Bottom 换手率
+            turnover_daily, turnover_summary = summarize_turnover(pred_label, N=5, lag=1)
 
-            # 统一生成全量性能图（交互式）
+            # 生成性能图
             output_dir = Path(f"output/{factor_col}_{return_col}")
             save_performance_graphs(pred_label, output_dir)
 
+            # 统一打印
             print(f"因子 {factor_col} / 收益 {return_col} 的评估：")
             print("IC 摘要：")
             print(ic_summary)
@@ -86,4 +93,8 @@ if __name__ == "__main__":
             print(ric_summary)
             print("分组收益（多空/多头）摘要：")
             print(group_summary)
+            print("得分自相关摘要：")
+            print(ac_summary)
+            print("Top/Bottom 换手率摘要：")
+            print(turnover_summary)
             print("性能图已保存至目录:", (output_dir).resolve())

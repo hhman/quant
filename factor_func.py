@@ -4,7 +4,7 @@ import statsmodels.api as sm
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from qlib.contrib.eva.alpha import calc_ic, calc_long_short_return
+from qlib.contrib.eva.alpha import calc_ic, calc_long_short_return, pred_autocorr
 from qlib.contrib.report.analysis_model.analysis_model_performance import model_performance_graph
 
 
@@ -102,7 +102,7 @@ def summarize_ic(
     *,
     date_col: str = "datetime",
     dropna: bool = True,
-) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+) -> Tuple[pd.Series, pd.Series, pd.DataFrame, pd.DataFrame]:
     """计算 IC / Rank IC 序列及其统计指标。"""
     ic, ric = calc_ic(pred, label, date_col=date_col, dropna=dropna)
 
@@ -126,8 +126,8 @@ def summarize_ic(
             }
         )
 
-    ic_summary = _summary(ic)
-    ric_summary = _summary(ric)
+    ic_summary = _summary(ic).rename("IC").to_frame().T
+    ric_summary = _summary(ric).rename("RankIC").to_frame().T
     return ic, ric, ic_summary, ric_summary
 
 
@@ -149,6 +149,49 @@ def summarize_group_return(pred_label: pd.DataFrame, *, quantile: float = 0.2) -
                 "count": len(s),
             }
         )
+
+    summary = pd.DataFrame({col: _summary(daily[col]) for col in daily.columns}).T
+    return daily, summary
+
+
+def summarize_autocorr(pred: pd.Series, *, lag: int = 1) -> tuple[pd.Series, pd.DataFrame]:
+    """计算预测得分的自相关序列及摘要。"""
+    ac = pred_autocorr(pred, lag=lag, inst_col="instrument", date_col="datetime")
+
+    def _summary(series: pd.Series) -> pd.DataFrame:
+        s = series.dropna()
+        if s.empty:
+            return pd.DataFrame(columns=["mean", "std", "count"])
+        summary = pd.Series({"mean": s.mean(), "std": s.std(), "count": len(s)}, name="AC")
+        return summary.to_frame().T
+
+    return ac, _summary(ac)
+
+
+def summarize_turnover(pred_label: pd.DataFrame, *, N: int = 5, lag: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """基于 qlib 的 Top/Bottom turnover 逻辑，输出日度换手率序列与摘要。"""
+    pred = pred_label.copy()
+    pred["score_last"] = pred.groupby(level="instrument", group_keys=False)["score"].shift(lag)
+
+    def _top_turnover(x: pd.DataFrame) -> float:
+        top_now = x.nlargest(len(x) // N, columns="score").index
+        top_prev = x.nlargest(len(x) // N, columns="score_last").index
+        return 1 - top_now.isin(top_prev).sum() / (len(x) // N)
+
+    def _bottom_turnover(x: pd.DataFrame) -> float:
+        bot_now = x.nsmallest(len(x) // N, columns="score").index
+        bot_prev = x.nsmallest(len(x) // N, columns="score_last").index
+        return 1 - bot_now.isin(bot_prev).sum() / (len(x) // N)
+
+    top = pred.groupby(level="datetime", group_keys=False).apply(_top_turnover)
+    bottom = pred.groupby(level="datetime", group_keys=False).apply(_bottom_turnover)
+    daily = pd.DataFrame({"top": top, "bottom": bottom})
+
+    def _summary(series: pd.Series) -> pd.Series:
+        s = series.dropna()
+        if s.empty:
+            return pd.Series(dtype=float)
+        return pd.Series({"mean": s.mean(), "std": s.std(), "count": len(s)})
 
     summary = pd.DataFrame({col: _summary(daily[col]) for col in daily.columns}).T
     return daily, summary
