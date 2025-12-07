@@ -228,7 +228,7 @@ def save_performance_graphs(
 
 def run_backtest(
     signal_series: pd.Series,
-    time_per_step: str,
+    hold_thresh: int,
     output_dir: Path,
 ) -> Tuple[Dict[str, Tuple[pd.DataFrame, dict]], Dict[str, Tuple[pd.DataFrame, object]]]:
     """运行回测并将回测图表输出到指定目录。"""
@@ -248,14 +248,16 @@ def run_backtest(
     # 策略
     strategy = TopkDropoutStrategy(
         signal=signal_series,
-        topk=50,
-        n_drop=5,
+        topk=5,
+        n_drop=0,
+        hold_thresh=hold_thresh,
     )
 
     # 执行器
     executor = SimulatorExecutor(
-        time_per_step=time_per_step,
+        time_per_step="day",
         generate_portfolio_metrics=True,
+        verbose=True,
     )
 
     # 运行回测

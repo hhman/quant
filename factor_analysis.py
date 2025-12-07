@@ -24,7 +24,7 @@ start_time = "2008-01-01"
 end_time = "2025-01-01"
 # 日/周/月对齐的持有期（按交易日约数）
 periods = {"1d": 1, "1w": 5, "1m": 20}
-# periods = {"1d": 1}
+# periods = {"1m": 20}
 
 # 映射：列名 -> 表达式
 alpha158_fields, alpha158_names = Alpha158DL.get_feature_config()
@@ -110,7 +110,12 @@ if __name__ == "__main__":
 
                 # 运行回测
                 if ic.mean() > 0.04 or ric.mean() > 0.04:
-                    portfolio_dict, indicator_dict = run_backtest(pred_label["score"], "day", output_dir)
+                    period_key = return_col.replace("ret_", "", 1)
+                    hold_thresh = periods.get(period_key)
+                    if hold_thresh is None:
+                        raise KeyError(f"未找到收益列 {return_col} 对应的持仓周期，请检查 periods 配置")
+
+                    portfolio_dict, indicator_dict = run_backtest(pred_label["score"], hold_thresh, output_dir)
                     print(portfolio_dict["1day"])
                     print(indicator_dict["1day"])
             except Exception as e:
