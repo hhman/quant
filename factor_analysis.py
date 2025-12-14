@@ -67,7 +67,7 @@ if __name__ == "__main__":
 
     # 中性化
     df = df.groupby(level="datetime", group_keys=False).apply(
-        lambda x: universal_neutralization(x, factor_cols, return_cols, style_continuous_cols, style_categorical_cols)
+        lambda x: universal_neutralization(x, factor_cols, style_continuous_cols, style_categorical_cols)
     )
 
     df_processed = df.copy()

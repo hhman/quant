@@ -42,6 +42,7 @@ class CSVDataLoader:
         "成交量",
         "成交额",
         "总市值",
+        "流通市值",
         "沪深300成分股",
         "上证50成分股",
         "中证500成分股",
@@ -51,7 +52,7 @@ class CSVDataLoader:
         "新版申万一级行业名称",
     )
 
-    PRICE_COLUMNS: Sequence[str] = ("开盘价", "最高价", "最低价", "收盘价", "前收盘价", "总市值")
+    PRICE_COLUMNS: Sequence[str] = ("开盘价", "最高价", "最低价", "收盘价", "前收盘价", "总市值", "流通市值")
     VOLUME_COLUMNS: Sequence[str] = ("成交量", "成交额")
     STATIC_COLUMNS: Sequence[str] = ("股票代码", "股票名称")
 
@@ -97,6 +98,7 @@ class CSVDataLoader:
         "amount",
         "industry",
         "total_mv",
+        "float_mv",
         "factor",
     )
 
@@ -174,6 +176,7 @@ class CSVDataLoader:
         df = df.set_index("date")
         df["industry"] = 0
         df["total_mv"] = 0
+        df["float_mv"] = 0
         df["factor"] = 1.0
         symbol_value = str(df["symbol"].iloc[0]) if "symbol" in df.columns else csv_path.stem
         columns = [col for col in self.OUTPUT_COLUMNS if col in df.columns]

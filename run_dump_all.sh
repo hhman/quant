@@ -15,7 +15,7 @@ python data_loader.py \
 python qlib_src/scripts/dump_bin.py dump_all \
   --data_path "${OUTPUT_DIR}/features" \
   --qlib_dir "${OUTPUT_DIR}/qlib_data" \
-  --include_fields "open,high,low,close,volume,amount,industry,total_mv,factor"
+  --include_fields "open,high,low,close,volume,amount,industry,total_mv,float_mv,factor"
 
 cp ${OUTPUT_DIR}/instruments/* ${OUTPUT_DIR}/qlib_data/instruments
 
