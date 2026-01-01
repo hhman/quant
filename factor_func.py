@@ -83,56 +83,56 @@ def universal_neutralization(
     if not factor_list:
         return pd.DataFrame(index=group.index)
 
-    # 仅保留因子列，生成新的 DataFrame（一次性拷贝，避免碎片化）
+    dt = group.index.get_level_values("datetime")[0] if "datetime" in group.index.names else "unknown_dt"
     result = group[factor_list].copy()
 
-    # ---------- 处理连续风格 ----------
+    # 1) 风格变量
     X_continuous = group[continuous_styles].astype("float64")
-
-    # ---------- 处理分类风格 ----------
     X_dummies = pd.DataFrame(index=group.index)
     for col in categorical_styles:
         dummies = pd.get_dummies(group[col], drop_first=True, prefix=col, dtype=float)
         X_dummies = pd.concat([X_dummies, dummies], axis=1)
-
-    # ---------- 合并连续和分类风格 ----------
+    if categorical_styles and X_dummies.empty:
+        print(f"[neutralize] {dt} 行业只有一个类别，回归仅使用连续风格")
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
-    # ---------- 准备回归数据（含权重） ----------
-    # clip(eps) 防止流通市值为 0 或极小值
-    reg_data = pd.concat(
-        [
-            group[factor_list].astype("float64"),                   # 因变量
-            X_styles,                                               # 自变量
-            np.sqrt(group[weight_col].astype("float64").clip(lower=eps)).rename("_w"),  # WLS 权重
-        ],
-        axis=1,
-    ).dropna()  # 丢弃缺失值
+    # 2) 权重（归一化）
+    w_all = np.sqrt(group[weight_col].astype("float64").clip(lower=eps)).rename("_w")
+    w_mean = w_all.mean()
+    if w_mean <= eps:
+        w_mean = 1.0
+    w_all = (w_all / w_mean).rename("_w")
 
-    # ---------- 样本数保护 ----------
-    if len(reg_data) < len(X_styles.columns) + 2:
-        dt = group.index.get_level_values("datetime")[0] if "datetime" in group.index.names else "unknown_dt"
-        print(f"[neutralize] {dt} 样本 {len(reg_data)} 少于所需 {len(X_styles.columns) + 2}，跳过中性化")
-        return result
-
-    # ---------- 构建回归自变量矩阵 ----------
-    X_reg = reg_data[X_styles.columns]
-    X_reg = sm.add_constant(X_reg, has_constant="add")  # 添加截距项
-    w = reg_data["_w"]  # WLS 权重
-
-    # ---------- 对每个因子做加权回归 ----------
+    # 3) 按因子回归
     for factor_name in factor_list:
-        Y_reg = reg_data[factor_name]
-        try:
-            model = sm.WLS(Y_reg, X_reg, weights=w).fit()  # 加权最小二乘回归
-            residual = model.resid.astype(group[factor_name].dtype, copy=False)  # 保持原数据类型
-            result.loc[residual.index, factor_name] = residual  # 写回新 DataFrame
-        except Exception as e:
-            dt = group.index.get_level_values("datetime")[0] if "datetime" in group.index.names else "unknown_dt"
-            print(f"[neutralize] {dt} 忽略 {factor_name} 的回归失败（如数据共线性、奇异矩阵等）：{e}；保留原值")
+        reg_data = pd.concat(
+            [group[[factor_name]].astype("float64"), X_styles, w_all],
+            axis=1,
+        )
+        before_drop = len(reg_data)
+        reg_data = reg_data.dropna()
+        if before_drop > 0:
+            drop_ratio = (before_drop - len(reg_data)) / before_drop
+            if drop_ratio > 0.1:
+                print(f"[neutralize] {dt} {factor_name} dropna 丢弃 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})")
+
+        n_params = len(X_styles.columns) + 2  # 截距 + 因子 + 风格
+        if len(reg_data) < n_params:
+            print(f"[neutralize] {dt} {factor_name} 样本 {len(reg_data)} 少于所需 {n_params}，置 NaN")
+            result[factor_name] = np.nan
             continue
 
-    # ---------- 返回中性化结果 ----------
+        X_reg = sm.add_constant(reg_data[X_styles.columns], has_constant="add")
+        Y_reg = reg_data[factor_name]
+        w = reg_data["_w"]
+        try:
+            model = sm.WLS(Y_reg, X_reg, weights=w).fit()
+            residual = model.resid.astype(group[factor_name].dtype, copy=False)
+            result.loc[residual.index, factor_name] = residual
+        except Exception as e:
+            print(f"[neutralize] {dt} {factor_name} 回归失败：{e}，置 NaN")
+            result[factor_name] = np.nan
+
     return result
 
 
@@ -168,49 +168,53 @@ def factor_return_regression(
         empty = pd.DataFrame()
         return empty, empty
 
-    # ---------- 处理连续风格 ----------
-    X_continuous = group[continuous_styles].astype("float64")
+    dt = group.index.get_level_values("datetime")[0] if "datetime" in group.index.names else "unknown_dt"
 
-    # ---------- 处理分类风格 ----------
+    # 1) 风格变量
+    X_continuous = group[continuous_styles].astype("float64")
     X_dummies = pd.DataFrame(index=group.index)
     for col in categorical_styles:
-        dummies = pd.get_dummies(
-            group[col],
-            drop_first=True,
-            prefix=col,
-            dtype=float,
-        )
+        dummies = pd.get_dummies(group[col], drop_first=True, prefix=col, dtype=float)
         X_dummies = pd.concat([X_dummies, dummies], axis=1)
-
-    # ---------- 合并连续和分类风格 ----------
+    if categorical_styles and X_dummies.empty:
+        print(f"[factor_ret] {dt} 行业只有一个类别，回归仅使用连续风格")
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
-    # ---------- WLS 权重 ----------
+    # 2) 权重（归一化）
     w = np.sqrt(group[weight_col].astype("float64").clip(lower=eps))
+    w_mean = w.mean()
+    if w_mean <= eps:
+        w_mean = 1.0
+    w = (w / w_mean).rename("_w")
 
     coef_row = {}
     t_row = {}
 
-    # ---------- 外层循环：因子 ----------
+    # 3) 因子×持仓期回归
     for factor_name in factor_list:
-        # 当前因子列 + 风格
         base_X = pd.concat([group[[factor_name]].astype("float64"), X_styles], axis=1)
 
-        # ---------- 内层循环：持仓周期 ----------
         for ret_col in ret_list:
-            # 若当日该周期收益全空，静默跳过
             if group[ret_col].dropna().empty:
                 continue
-            reg_data = pd.concat(
-                [group[[ret_col]].astype("float64"), base_X, w.rename("_w")],
-                axis=1,
-            ).dropna()
 
-            # 样本数保护
-            n_params = base_X.shape[1] + 1  # 因子+连续+分类+截距
+            reg_data = pd.concat(
+                [group[[ret_col]].astype("float64"), base_X, w],
+                axis=1,
+            )
+            before_drop = len(reg_data)
+            reg_data = reg_data.dropna()
+            if before_drop > 0:
+                drop_ratio = (before_drop - len(reg_data)) / before_drop
+                if drop_ratio > 0.1:
+                    print(f"[factor_ret] {dt} {factor_name}-{ret_col} dropna 丢弃 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})")
+
+            n_params = base_X.shape[1] + 1  # 截距
+            col_name = f"{factor_name}_{ret_col}"
             if len(reg_data) < n_params + 1:
-                dt = group.index.get_level_values("datetime")[0] if "datetime" in group.index.names else "unknown_dt"
-                print(f"[factor_ret] {dt} 跳过 {factor_name} 对 {ret_col} 的回归：样本 {len(reg_data)} < 所需 {n_params + 1}")
+                print(f"[factor_ret] {dt} 跳过 {factor_name} 对 {ret_col} 的回归：样本 {len(reg_data)} < 所需 {n_params + 1}，置 NaN")
+                coef_row[col_name] = np.nan
+                t_row[col_name] = np.nan
                 continue
 
             X_reg = sm.add_constant(reg_data.drop(columns=[ret_col, "_w"]))
@@ -219,14 +223,10 @@ def factor_return_regression(
 
             try:
                 model = sm.WLS(Y_reg, X_reg, weights=w_reg).fit()
-                col_name = f"{factor_name}_{ret_col}"
                 coef_row[col_name] = model.params.get(factor_name, np.nan)
                 t_row[col_name] = model.tvalues.get(factor_name, np.nan)
             except Exception as e:
-                # 异常保护，保留 NaN 并提示
-                dt = group.index.get_level_values("datetime")[0] if "datetime" in group.index.names else "unknown_dt"
-                print(f"[factor_ret] {dt} 忽略 {factor_name} 对 {ret_col} 的回归失败（{e}），保留 NaN")
-                col_name = f"{factor_name}_{ret_col}"
+                print(f"[factor_ret] {dt} {factor_name} 对 {ret_col} 的回归失败（{e}），置 NaN")
                 coef_row[col_name] = np.nan
                 t_row[col_name] = np.nan
 
@@ -455,14 +455,20 @@ def summarize_turnover(
         pred["score_last"] = pred.groupby(level="instrument", group_keys=False)[score_col].shift(lag)
 
         def _top_turnover(x: pd.DataFrame) -> float:
-            top_now = x.nlargest(len(x) // N, columns=score_col).index
-            top_prev = x.nlargest(len(x) // N, columns="score_last").index
-            return 1 - top_now.isin(top_prev).sum() / (len(x) // N)
+            k = len(x) // N
+            if k == 0:
+                return np.nan
+            top_now = x.nlargest(k, columns=score_col).index
+            top_prev = x.nlargest(k, columns="score_last").index
+            return 1 - top_now.isin(top_prev).sum() / k
 
         def _bottom_turnover(x: pd.DataFrame) -> float:
-            bot_now = x.nsmallest(len(x) // N, columns=score_col).index
-            bot_prev = x.nsmallest(len(x) // N, columns="score_last").index
-            return 1 - bot_now.isin(bot_prev).sum() / (len(x) // N)
+            k = len(x) // N
+            if k == 0:
+                return np.nan
+            bot_now = x.nsmallest(k, columns=score_col).index
+            bot_prev = x.nsmallest(k, columns="score_last").index
+            return 1 - bot_now.isin(bot_prev).sum() / k
 
         top = pred.groupby(level="datetime", group_keys=False).apply(_top_turnover)
         bottom = pred.groupby(level="datetime", group_keys=False).apply(_bottom_turnover)
