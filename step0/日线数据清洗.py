@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
 import json
+import sys
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from cli_config import parse_common_args, normalize_args
 
 
 @dataclass
@@ -417,54 +421,32 @@ class CSVDataLoader:
         self._write_category_files()
 
 
-def parse_args() -> argparse.Namespace:
-    """构建CLI参数解析器。"""
-    parser = argparse.ArgumentParser(description="CSV数据加载器示例")
-    parser.add_argument(
-        "--start-date",
-        type=str,
-        default="2024-01-01",
-        help="开始日期，格式YYYY-MM-DD",
-    )
-    parser.add_argument(
-        "--end-date",
-        type=str,
-        default="2024-12-31",
-        help="结束日期，格式YYYY-MM-DD",
-    )
-    parser.add_argument(
-        "--index-dir",
-        type=str,
-        default="index",
-        help="指数/日历CSV目录路径",
-    )
-    parser.add_argument(
-        "--stock-dir",
-        type=str,
-        default="stock",
-        help="股票原始CSV目录",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="output",
-        help="输出目录",
-    )
-    return parser.parse_args()
-
-
 def main() -> None:
-    """CLI 入口，串联参数与加载流程。"""
-    args = parse_args()
+    """CLI 入口，使用统一的CLI参数系统。"""
+    args = parse_common_args()
+    params = normalize_args(args, "step0")
+
+    if params['dry_run']:
+        print("🔍 data_loader.py 模拟运行模式")
+        print(f"  股票CSV目录: {params['stock_dir']}")
+        print(f"  指数CSV目录: {params['index_dir']}")
+        print(f"  输出目录: {params['output_dir']}")
+        print(f"  时间范围: [{params['start_date']}, {params['end_date']}]")
+        return
+
     loader = CSVDataLoader(
-        start_date=args.start_date,
-        end_date=args.end_date,
-        index_dir=args.index_dir,
-        stock_dir=args.stock_dir,
-        output_dir=args.output_dir,
+        start_date=params['start_date'],
+        end_date=params['end_date'],
+        index_dir=params['index_dir'],
+        stock_dir=params['stock_dir'],
+        output_dir=params['output_dir'],
     )
     loader.save_data()
-    print(f"数据清洗完成，结果已写入: {loader.output_dir.resolve()}")
+
+    if params['verbose']:
+        print(f"✓ 数据清洗完成，结果已写入: {loader.output_dir.resolve()}")
+    else:
+        print(f"数据清洗完成，结果已写入: {loader.output_dir.resolve()}")
 
 
 if __name__ == "__main__":

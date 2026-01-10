@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
 import pandas as pd
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from cli_config import parse_common_args, normalize_args
 
 
 class PITDataLoader:
@@ -113,26 +118,30 @@ class PITDataLoader:
             sub[list(self.OUTPUT_COLUMNS)].to_csv(out_path, index=False, encoding=self.output_encoding)
 
 
-def parse_args() -> argparse.Namespace:
-    """构建 CLI 参数解析器。"""
-    parser = argparse.ArgumentParser(description="将财务宽表转为 PIT 长表（适配 dump_pit.py）")
-    parser.add_argument("--start-date", type=str, default="2024-01-01", help="开始日期，格式YYYY-MM-DD")
-    parser.add_argument("--end-date", type=str, default="2024-12-31", help="结束日期，格式YYYY-MM-DD")
-    parser.add_argument("--input-dir", type=Path, default=Path("finance"), help="原始财务 CSV 目录")
-    parser.add_argument("--output-dir", type=Path, default=Path("output"), help="输出目录，按股票代码分文件")
-    return parser.parse_args()
-
-
 def main() -> None:
-    args = parse_args()
+    """CLI 入口，使用统一的CLI参数系统。"""
+    args = parse_common_args()
+    params = normalize_args(args, "step0")
+
+    if params['dry_run']:
+        print("🔍 pit_loader.py 模拟运行模式")
+        print(f"  财务CSV目录: {params['finance_dir']}")
+        print(f"  输出目录: {params['output_dir']}")
+        print(f"  时间范围: [{params['start_date']}, {params['end_date']}]")
+        return
+
     loader = PITDataLoader(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
-        start_date=args.start_date,
-        end_date=args.end_date,
+        input_dir=params['finance_dir'],
+        output_dir=params['output_dir'],
+        start_date=params['start_date'],
+        end_date=params['end_date'],
     )
     loader.save_data()
-    print(f"数据清洗完成，结果已写入: {loader.output_dir.resolve()}")
+
+    if params['verbose']:
+        print(f"✓ 数据清洗完成，结果已写入: {loader.output_dir.resolve()}")
+    else:
+        print(f"数据清洗完成，结果已写入: {loader.output_dir.resolve()}")
 
 
 if __name__ == "__main__":
