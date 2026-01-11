@@ -53,12 +53,18 @@ def main() -> None:
     print(f"  ✓ 标准化因子: {factor_std.shape}")
     print(f"  ✓ 风格数据: {styles_df.shape}")
 
-    # 提取因子列
+    # 提取因子列 - 使用显式传入的factor_formulas参数
     factor_cols = [col for col in factor_std.columns if col in params['factor_formulas']]
+
+    # 如果没有匹配的因子，说明参数错误
+    if not factor_cols:
+        print(f"❌ 错误: 请求的因子 {params['factor_formulas']} 在cache中不存在")
+        print(f"  cache中的因子列: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}")
+        sys.exit(1)
 
     # 检查必需的风格列
     required_style_cols = ["$total_mv", "$industry", "$float_mv"]
-    missing_cols = [col for col in factor_cols + required_style_cols if col not in styles_df.columns]
+    missing_cols = [col for col in required_style_cols if col not in styles_df.columns]
     if missing_cols:
         print(f"❌ 错误: 缺少列: {missing_cols}")
         sys.exit(1)
@@ -66,7 +72,7 @@ def main() -> None:
     # 合并因子和风格数据
     data_for_neutralize = pd.concat([factor_std[factor_cols], styles_df[required_style_cols]], axis=1)
 
-    print(f"  ✓ 因子列: {len(factor_cols)}个")
+    print(f"  ✓ 因子列: {len(factor_cols)}个 {factor_cols}")
     print(f"  ✓ 风格列: {required_style_cols}")
 
     # 执行中性化

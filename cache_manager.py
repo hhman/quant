@@ -54,6 +54,7 @@ class CacheManager:
     def save_metadata(self, stage: str):
         """
         保存当前step的元数据
+        所有参数必须显式传入，不做继承
 
         Args:
             stage: step名称

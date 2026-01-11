@@ -18,25 +18,19 @@ def parse_common_args() -> argparse.Namespace:
         epilog="""
 示例:
   # Step0: 数据预处理 (从CSV到Qlib格式)
-  bash step0/step0.sh --start-date 2008-01-01 --end-date 2025-01-01 --raw-data-dir raw_data --verbose
+  bash step0/step0.sh --start-date 2008-01-01 --end-date 2025-01-01 --stock-dir stock --index-dir index --finance-dir finance --verbose
 
-  # Step1: 生成cache（使用因子表达式）
-  python step1/因子提取与预处理.py --market csi300 --factor-formulas "Ref($close,60)/$close,MOM($close,20)" --periods 1d,1w,1m
+  # Step1: 生成cache（必须显式指定所有参数，多个因子用分号分隔）
+  python step1/因子提取与预处理.py --market csi300 --start-date 2023-01-01 --end-date 2025-12-31 --factor-formulas "Ref($close,60)/$close;MA($close,20)" --periods 1d,1w,1m
 
-  # Step2: 使用cache中的所有数据
-  python step2/因子中性化.py --market csi300
+  # Step2: 行业市值中性化（必须显式指定所有参数，多个因子用分号分隔）
+  python step2/因子中性化.py --market csi300 --start-date 2023-01-01 --end-date 2025-12-31 --factor-formulas "Ref($close,60)/$close;MA($close,20)"
 
-  # Step2: 指定子集表达式（智能匹配）
-  python step2/因子中性化.py --market csi300 --factor-formulas "Ref($close,60)/$close" --periods 1d
+  # Step3: 因子收益率计算（必须显式指定所有参数，多个因子用分号分隔）
+  python step3/因子收益率计算.py --market csi300 --start-date 2023-01-01 --end-date 2025-12-31 --factor-formulas "Ref($close,60)/$close;MA($close,20)" --periods 1d,1w,1m
 
-  # Step2: 指定时间范围
-  python step2/因子中性化.py --market csi300 --start-date 2022-01-01 --end-date 2023-01-01
-
-  # Step3: 因子收益率计算
-  python step3/因子收益率计算.py --market csi300
-
-  # Step4: 因子绩效评估
-  python step4/因子绩效评估.py --market csi300
+  # Step4: 因子绩效评估（必须显式指定所有参数，多个因子用分号分隔）
+  python step4/因子绩效评估.py --market csi300 --start-date 2023-01-01 --end-date 2025-12-31 --factor-formulas "Ref($close,60)/$close;MA($close,20)" --periods 1d,1w,1m
         """
     )
 
@@ -51,29 +45,29 @@ def parse_common_args() -> argparse.Namespace:
     parser.add_argument(
         '--start-date',
         type=str,
-        default=None,  # None表示使用cache中的值
-        help='起始日期 (default: 使用cache中的起始日期)'
+        default=None,
+        help='起始日期 (step1/2/3/4必须显式指定)'
     )
 
     parser.add_argument(
         '--end-date',
         type=str,
-        default=None,  # None表示使用cache中的值
-        help='结束日期 (default: 使用cache中的结束日期)'
+        default=None,
+        help='结束日期 (step1/2/3/4必须显式指定)'
     )
 
     parser.add_argument(
         '--factor-formulas',
         type=str,
-        default=None,  # None表示使用cache中的所有因子
-        help='因子表达式列表，逗号分隔 (default: 使用cache中的所有因子)'
+        default=None,
+        help='因子表达式列表，分号分隔 (step1/2/3/4必须显式指定)，如: "Ref($close,60)/$close;MA($close,20)"'
     )
 
     parser.add_argument(
         '--periods',
         type=str,
-        default=None,  # None表示使用cache中的所有周期
-        help='收益率周期，逗号分隔，如: 1d,1w,1m (default: 使用cache中的所有周期)'
+        default=None,
+        help='收益率周期，逗号分隔，如: 1d,1w,1m (step1/3/4必须显式指定)'
     )
 
     parser.add_argument(
@@ -189,9 +183,10 @@ def parse_periods(periods_str: Optional[str]) -> Optional[Dict[str, int]]:
 def parse_factor_formulas(factor_formulas_str: Optional[str]) -> Optional[List[str]]:
     """
     解析因子表达式字符串为列表
+    使用分号作为分隔符，支持表达式中的逗号
 
     Args:
-        factor_formulas_str: 逗号分隔的因子表达式，如 "Ref($close,60)/$close,MOM($close,20)"
+        factor_formulas_str: 分号分隔的因子表达式，如 "Ref($close,60)/$close;MOM($close,20)"
 
     Returns:
         因子表达式列表
@@ -199,7 +194,7 @@ def parse_factor_formulas(factor_formulas_str: Optional[str]) -> Optional[List[s
     if factor_formulas_str is None:
         return None
 
-    return [formula.strip() for formula in factor_formulas_str.split(',')]
+    return [formula.strip() for formula in factor_formulas_str.split(';')]
 
 
 def normalize_args(args: argparse.Namespace, step: str) -> dict:
@@ -245,9 +240,44 @@ def normalize_args(args: argparse.Namespace, step: str) -> dict:
 
     # step1必须明确指定factor_formulas和periods
     if step == "step1":
+        if params['start_date'] is None:
+            raise ValueError("step1必须使用 --start-date 参数指定起始日期")
+        if params['end_date'] is None:
+            raise ValueError("step1必须使用 --end-date 参数指定结束日期")
         if params['factor_formulas'] is None:
             raise ValueError("step1必须使用 --factor-formulas 参数指定因子表达式列表")
         if params['periods'] is None:
             raise ValueError("step1必须使用 --periods 参数指定周期列表")
+
+    # step2必须明确指定start_date, end_date, factor_formulas
+    if step == "step2":
+        if params['start_date'] is None:
+            raise ValueError("step2必须使用 --start-date 参数指定起始日期")
+        if params['end_date'] is None:
+            raise ValueError("step2必须使用 --end-date 参数指定结束日期")
+        if params['factor_formulas'] is None:
+            raise ValueError("step2必须使用 --factor-formulas 参数指定因子表达式列表")
+
+    # step3必须明确指定start_date, end_date, factor_formulas, periods
+    if step == "step3":
+        if params['start_date'] is None:
+            raise ValueError("step3必须使用 --start-date 参数指定起始日期")
+        if params['end_date'] is None:
+            raise ValueError("step3必须使用 --end-date 参数指定结束日期")
+        if params['factor_formulas'] is None:
+            raise ValueError("step3必须使用 --factor-formulas 参数指定因子表达式列表")
+        if params['periods'] is None:
+            raise ValueError("step3必须使用 --periods 参数指定周期列表")
+
+    # step4必须明确指定start_date, end_date, factor_formulas, periods
+    if step == "step4":
+        if params['start_date'] is None:
+            raise ValueError("step4必须使用 --start-date 参数指定起始日期")
+        if params['end_date'] is None:
+            raise ValueError("step4必须使用 --end-date 参数指定结束日期")
+        if params['factor_formulas'] is None:
+            raise ValueError("step4必须使用 --factor-formulas 参数指定因子表达式列表")
+        if params['periods'] is None:
+            raise ValueError("step4必须使用 --periods 参数指定周期列表")
 
     return params

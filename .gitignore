@@ -7,6 +7,23 @@ qlib_src
 panda_factor_src
 mlruns
 Users
+gplearn_src
 
 __pycache__
 .DS_Store
+
+# IDE and Editor
+.vscode/
+.claude/
+
+# Cache and generated data
+cache/
+
+# Test reports
+phase1_*.txt
+phase1_*.md
+*_test_*.sh
+
+# Backup files
+*.bak
+*.swp

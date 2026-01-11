@@ -8,7 +8,10 @@ set -e  # 遇到错误立即退出
 # ========== 默认参数 ==========
 START_DATE=${START_DATE:-"2008-01-01"}
 END_DATE=${END_DATE:-"2025-01-01"}
-RAW_DATA_DIR=${RAW_DATA_DIR:-"raw_data"}
+RAW_DATA_DIR=${RAW_DATA_DIR:-""}
+STOCK_DIR=${STOCK_DIR:-""}
+INDEX_DIR=${INDEX_DIR:-""}
+FIN_DIR=${FIN_DIR:-""}
 CACHE_DIR=${CACHE_DIR:-"cache"}
 QLIB_SRC_DIR=${QLIB_SRC_DIR:-"qlib_src"}
 VERBOSE=${VERBOSE:-0}
@@ -20,6 +23,9 @@ while [[ $# -gt 0 ]]; do
         --start-date) START_DATE="$2"; shift 2 ;;
         --end-date) END_DATE="$2"; shift 2 ;;
         --raw-data-dir) RAW_DATA_DIR="$2"; shift 2 ;;
+        --stock-dir) STOCK_DIR="$2"; shift 2 ;;
+        --index-dir) INDEX_DIR="$2"; shift 2 ;;
+        --finance-dir) FIN_DIR="$2"; shift 2 ;;
         --cache-dir) CACHE_DIR="$2"; shift 2 ;;
         --qlib-src-dir) QLIB_SRC_DIR="$2"; shift 2 ;;
         --verbose) VERBOSE=1; shift ;;
@@ -30,7 +36,10 @@ while [[ $# -gt 0 ]]; do
             echo "选项:"
             echo "  --start-date DATE         起始日期 (default: 2008-01-01)"
             echo "  --end-date DATE           结束日期 (default: 2025-01-01)"
-            echo "  --raw-data-dir DIR        原始CSV数据目录 (default: raw_data)"
+            echo "  --raw-data-dir DIR        原始CSV数据目录 (包含stock/index/finance子目录)"
+            echo "  --stock-dir DIR           股票CSV数据目录"
+            echo "  --index-dir DIR           指数CSV数据目录"
+            echo "  --finance-dir DIR         财务CSV数据目录"
             echo "  --cache-dir DIR           Cache目录 (default: cache)"
             echo "  --qlib-src-dir DIR        Qlib脚本目录 (default: qlib_src)"
             echo "  --verbose                 显示详细输出"
@@ -38,8 +47,14 @@ while [[ $# -gt 0 ]]; do
             echo "  --help                    显示此帮助信息"
             echo ""
             echo "示例:"
+            echo "  # 使用单独的目录参数"
+            echo "  bash step0/step0.sh --stock-dir stock --index-dir index --finance-dir finance"
+            echo ""
+            echo "  # 使用统一的raw-data-dir"
+            echo "  bash step0/step0.sh --raw-data-dir raw_data"
+            echo ""
+            echo "  # 指定时间范围"
             echo "  bash step0/step0.sh --start-date 2008-01-01 --end-date 2025-01-01 --verbose"
-            echo "  bash step0/step0.sh --raw-data-dir my_data --cache-dir my_cache"
             exit 0
             ;;
         *) echo "❌ 未知参数: $1 (使用 --help 查看帮助)"; exit 1 ;;
@@ -47,16 +62,26 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ========== 目录配置 ==========
-STOCK_DIR="${RAW_DATA_DIR}/stock"
-INDEX_DIR="${RAW_DATA_DIR}/index"
-FIN_DIR="${RAW_DATA_DIR}/finance"
+# 如果指定了--raw-data-dir，则从中派生子目录
+if [[ -n "$RAW_DATA_DIR" ]]; then
+    STOCK_DIR="${RAW_DATA_DIR}/stock"
+    INDEX_DIR="${RAW_DATA_DIR}/index"
+    FIN_DIR="${RAW_DATA_DIR}/finance"
+fi
+
+# 如果仍未设置，使用默认值
+STOCK_DIR=${STOCK_DIR:-"stock"}
+INDEX_DIR=${INDEX_DIR:-"index"}
+FIN_DIR=${FIN_DIR:-"finance"}
 OUTPUT_DIR="${CACHE_DIR}/step0_temp"
 QLIB_DIR="${CACHE_DIR}/qlib_data"
 
 # ========== 打印配置信息 ==========
 echo "📊 Step0: 数据预处理"
 echo "  时间范围: [$START_DATE, $END_DATE]"
-echo "  原始数据目录: $RAW_DATA_DIR"
+if [[ -n "$RAW_DATA_DIR" ]]; then
+    echo "  原始数据目录: $RAW_DATA_DIR"
+fi
 echo "    - 股票CSV: $STOCK_DIR"
 echo "    - 指数CSV: $INDEX_DIR"
 echo "    - 财务CSV: $FIN_DIR"
@@ -108,7 +133,7 @@ python "$(dirname "$0")/日线数据清洗.py" \
   --end-date "$END_DATE" \
   --stock-dir "$STOCK_DIR" \
   --index-dir "$INDEX_DIR" \
-  --output-dir "$OUTPUT_DIR"
+  --cache-dir "$CACHE_DIR"
 
 if [ "$VERBOSE" -eq 1 ]; then
     echo "  ✓ 数据清洗完成"
@@ -143,8 +168,8 @@ echo "⚙️  Step0.4: 透视财务数据..."
 python "$(dirname "$0")/财务数据透视.py" \
   --start-date "$START_DATE" \
   --end-date "$END_DATE" \
-  --input-dir "$FIN_DIR" \
-  --output-dir "$OUTPUT_DIR"
+  --finance-dir "$FIN_DIR" \
+  --cache-dir "$CACHE_DIR"
 
 if [ "$VERBOSE" -eq 1 ]; then
     echo "  ✓ 财务数据透视完成"
@@ -176,11 +201,19 @@ fi
 # ========== 保存元数据 ==========
 echo "📝 保存Step0元数据..."
 mkdir -p "$CACHE_DIR"
+
+# 构建JSON元数据
+if [[ -n "$RAW_DATA_DIR" ]]; then
+    RAW_DATA_JSON="\"raw_data_dir\": \"$RAW_DATA_DIR\","
+else
+    RAW_DATA_JSON=""
+fi
+
 cat > "${CACHE_DIR}/step0_metadata.json" << EOF
 {
   "start_date": "$START_DATE",
   "end_date": "$END_DATE",
-  "raw_data_dir": "$RAW_DATA_DIR",
+  ${RAW_DATA_JSON}
   "stock_dir": "$STOCK_DIR",
   "index_dir": "$INDEX_DIR",
   "finance_dir": "$FIN_DIR",
