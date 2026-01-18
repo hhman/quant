@@ -1,0 +1,41 @@
+# ========== 第三方依赖 (Git Submodules) ==========
+# 以 _src 结尾的目录定义为项目外的 git module
+*_src/
+
+# ========== 原始数据目录 ==========
+# 符号链接指向的外部数据目录
+index
+stock
+finance
+
+# ========== 机器学习 ==========
+mlruns/
+
+# ========== 系统文件 ==========
+__pycache__/
+.DS_Store
+Users/
+
+# ========== IDE和编辑器 ==========
+.vscode/
+.claude/
+*.swp
+*.swo
+
+# ========== Cache目录 ==========
+# 统一使用 .cache/ 作为cache目录
+.cache/
+
+# ========== 临时文件 ==========
+*.bak
+*.tmp
+*.log
+
+# ========== 敏感配置 ==========
+# 环境变量文件（包含密钥、token等敏感信息）
+.env
+# 其他敏感文件
+*.key
+*.secret
+credentials.json
+config.secrets.json

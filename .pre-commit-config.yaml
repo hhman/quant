@@ -1,0 +1,19 @@
+# Pre-commit 配置
+# 安装：pip install pre-commit && pre-commit install
+
+repos:
+  # Ruff - Python linting 和格式化
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.1
+    hooks:
+      # Lint 并自动修复
+      - id: ruff
+        args: [--fix]
+        # 检查所有 .py 文件，只排除第三方模块
+        files: \.py$
+        exclude: ^.*_src/
+
+      # 格式化代码
+      - id: ruff-format
+        files: \.py$
+        exclude: ^.*_src/
