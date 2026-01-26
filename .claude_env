@@ -1,0 +1,8 @@
+# Conda 环境配置
+# 供 Claude Code 使用
+
+CONDA_PATH=/opt/homebrew/anaconda3
+CONDA_ENV=quant
+
+# Conda 初始化脚本
+CONDA_INIT=/opt/homebrew/anaconda3/etc/profile.d/conda.sh

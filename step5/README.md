@@ -1,0 +1,27 @@
+# Step5: 遗传算法因子挖掘
+
+## CLI参数
+
+| 参数 | 类型 | 默认值 | 必需 | 说明 |
+|------|------|--------|------|------|
+| `--market` | str | "csi300" | 否 | 市场标识 (必须与Step1一致) |
+| `--start-date` | str | None | **是** | 起始日期 (必须与Step1一致) |
+| `--end-date` | str | None | **是** | 结束日期 (必须与Step1一致) |
+| `--random-state` | int | None | 否 | 随机种子 |
+
+### 参数约束
+- `market`, `start_date`, `end_date` 必须与Step1完全一致
+
+### 可用市场标识
+`csi300`, `sse50`, `csi500`, `csi1000`, `csi2000`, `csi_gem`, `all`
+
+## 输出文件
+
+无文件输出，结果直接打印到终端。
+
+## 依赖关系
+
+**前置依赖**:
+- Step1生成的 `returns.parquet`
+
+**被依赖**: 无
