@@ -39,8 +39,15 @@ def mine_factors_with_gp(
     provider_uri : str
         Qlib 数据路径
     random_state : int
-        随机种子
+        随机种子（不指定则自动生成）
     """
+    # 处理随机种子：未指定时自动生成
+    if random_state is None:
+        import random
+
+        random_state = random.randint(0, 2**32 - 1)
+        print(f"  自动生成随机种子: {random_state}")
+
     # 初始化 Qlib
     print(f"🔧 初始化 Qlib: {provider_uri}")
     qlib.init(provider_uri=provider_uri, region=REG_CN)
@@ -90,6 +97,24 @@ def mine_factors_with_gp(
     )
 
     expressions = miner.run(features_df, ret_df)
+
+    # 保存表达式文件
+    print("💾 保存表达式文件...")
+    output_dir = Path(".cache")
+    output_dir.mkdir(exist_ok=True)
+
+    start_compact = start_date.replace("-", "")
+    end_compact = end_date.replace("-", "")
+    filename = (
+        f"{market}_{start_compact}_{end_compact}__gp_seed{random_state}.expression.txt"
+    )
+    output_path = output_dir / filename
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        for expr in expressions:
+            f.write(f"{expr}\n")
+
+    print(f"  ✓ 表达式已保存: {output_path}")
 
     # 输出结果
     print(f"\n✅ 挖掘完成！发现的 {len(expressions)} 个因子表达式:")

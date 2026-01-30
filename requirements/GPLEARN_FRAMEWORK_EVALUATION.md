@@ -1,7 +1,7 @@
 # GPlearn 因子挖掘框架 - 问题与优化评估报告
 
 > **评估日期**: 2026-01-27
-> **版本**: V2.1
+> **版本**: V2.2
 > **评估视角**: 量化金融算法工程
 > **项目定位**: 研究原型（非生产系统）
 
@@ -95,12 +95,14 @@ core/gplearn/ (改进层，可修改)
 - ❌ 异常处理不足 → 使用 print 输出错误
 
 **保留的核心问题**（仍需解决）:
-- ✅ 缺乏样本外验证 (P0)
 - ✅ 数据清洗粗糙 (P0)
 - ✅ 适应度函数单一 (P0)
 - ✅ GP 参数过小 (P1)
-- ✅ 缺乏后验分析 (P1)
 - ✅ 算子库不足 (P1)
+
+**已解决的问题** (V2.2):
+- ✅ 缺乏样本外验证 → 通过 Pipeline 架构解决
+- ✅ 缺乏后验分析 → 通过 Step1-4 复用解决
 
 ---
 
@@ -108,7 +110,7 @@ core/gplearn/ (改进层，可修改)
 
 ### P0 级别（金融正确性 - 必须解决）
 
-#### 问题1：缺乏样本外验证 ⭐⭐⭐⭐⭐
+#### 问题1：缺乏样本外验证 ⭐⭐⭐⭐⭐ ✅ V2.2 已通过 Pipeline 架构解决
 
 **位置**: [core/gplearn/miner.py](../core/gplearn/miner.py)
 
@@ -129,25 +131,52 @@ def run(self, features_df, target_df) -> List[str]:
 - 挖掘出的因子可能只是历史数据拟合
 - 实盘交易时可能产生严重亏损
 
-**解决方案**: 在 miner.py 内部切分数据
-```python
-def run(self, features_df, target_df):
-    # 1. 时间序列切分（在 core/gplearn 内部）
-    train_features, train_target, val_features, val_target = \
-        self._split_data(features_df, target_df)
+**解决方案 (V2.2)**: Pipeline 架构 + Skills 声明式编排
 
-    # 2. 训练
-    X_train, y_train, index_train, boundaries_train = \
-        self._prepare_data(train_features, train_target)
-    self._train(X_train, y_train, index_train, boundaries_train)
+**架构思路**:
+```
+训练阶段:
+  [2020-2022数据] → GP挖掘 → 表达式保存到文件
+                           ↓
+                   .cache/csi300_20200101_20221231__gp_seed12345.expression.txt
 
-    # 3. 验证（新增）
-    self._validate(val_features, val_target)
-
-    return self._export()
+验证阶段:
+  表达式文件 → Step1计算因子值 → Step4分析(IC/IR/分组收益)
+             ↓
+          [2023-2024数据]  ← 样本外数据
 ```
 
-**工作量**: 1 天
+**关键改进**:
+1. ✅ **表达式持久化**: Step5 训练结果保存为 `.expression.txt` 文件
+   - 文件名包含元数据: `{market}_{start}_{end}__gp_seed{seed}.expression.txt`
+   - 纯文本格式，每行一个表达式
+
+2. ✅ **训练/验证分离**: 通过时间维度的 Pipeline 实现样本外验证
+   - Step5: 在训练期 [2020-2022] 挖掘因子
+   - Step1-4: 在验证期 [2023-2024] 评估因子
+
+3. ✅ **声明式编排**: 使用 Skills 串接任务，无需手动编写 Pipeline
+   ```python
+   @skill
+   def mine_and_validate(market, train_period, val_period):
+       # Step5: 训练
+       expressions = mine_gp(market, *train_period)
+
+       # Step1-4: 验证
+       for expr in expressions:
+           factor_values = calculate_factor(expr, market, *val_period)
+           analysis = evaluate_factor(factor_values)
+           yield {'expr': expr, 'val_ic': analysis.ic}
+   ```
+
+4. ✅ **高级验证模式**: Skills 可实现复杂的验证策略
+   - **Walk-Forward**: 滚动训练窗口 + 验证
+   - **K-Fold**: 多期交叉验证
+   - **时间序列切分**: 多个训练/验证组合
+
+**工作量**: 已完成（V2.2）
+
+---
 
 ---
 
@@ -258,35 +287,28 @@ n_components: int = 10           # 3 → 10
 
 ---
 
-#### 问题5：缺乏后验分析 ⭐⭐⭐⭐
+#### 问题5：缺乏后验分析 ⭐⭐⭐⭐ ✅ V2.2 已通过 Step1-4 复用解决
 
 **位置**: [core/gplearn/miner.py:199-209](../core/gplearn/miner.py)
 
-**现状**:
-```python
-def _export(self) -> List[str]:
-    """导出因子表达式"""
-    expressions = []
-    for program_list in self._transformer._programs:
-        for program in program_list:
-            expressions.append(str(program))
-    return expressions  # ← 仅输出表达式
-```
+**现状**: Step5 只负责训练和导出表达式，后验分析通过 Step1-4 完成
 
-**问题**: 无任何分析（IC/IR、分位数、换手率、回撤）
+**原始问题**: 无任何分析（IC/IR、分位数、换手率、回撤）
 
-**解决方案**: 新增 analyze_factors() 方法
-```python
-def analyze_factors(self, features_df, target_df) -> pd.DataFrame:
-    """因子后验分析"""
-    # 1. IC/IR 统计
-    # 2. 分位数收益
-    # 3. 换手率
-    # 4. 最大回撤
-    return analysis_df
-```
+**解决方案 (V2.2)**: Pipeline 架构 + Step1-4 复用
 
-**工作量**: 2-3 天
+**架构思路**:
+- Step5: GP挖掘 → 保存表达式到 `.expression.txt`
+- Step1: 读取表达式 → 计算因子值 → 保存到 `.parquet`
+- Step4: 加载因子值 → 完整分析（IC/IR、分组收益、换手率、可视化）
+
+**关键优势**:
+1. ✅ **完整的分析体系**: Step4 已提供完整的后验分析功能
+2. ✅ **复用现有代码**: 无需重复开发，只需通过 Skills 串接
+3. ✅ **声明式编排**: 使用 Skills 自动化流程
+4. ✅ **灵活的分析策略**: 支持样本外测试、滚动验证、K-Fold 等多种模式
+
+**工作量**: 已完成（V2.2）
 
 ---
 
@@ -562,17 +584,17 @@ def rolling_rsi(arr, window):
 
 ## 优先级矩阵
 
-| 问题 | 优先级 | 工作量 | 修改文件 | 依赖 |
-|------|--------|--------|---------|------|
-| **样本外验证** | P0 | 1 天 | miner.py, config.py | - |
+| 问题 | 优先级 | 工作量 | 修改文件 | 依赖 | 状态 |
+|------|--------|--------|---------|------|------|
+| **样本外验证** | P0 | - | - | - | ✅ V2.2 |
 | **数据清洗** | P0 | 2-3 天 | data_cleaner.py（新建）, config.py | - |
 | **适应度函数** | P0 | 1 天 | fitness.py, config.py | - |
 | **GP 参数优化** | P1 | 0.5 天 | config.py | - |
-| **后验分析** | P1 | 2-3 天 | miner.py, config.py | 样本外验证 |
-| **算子库扩展** | P1 | 3-5 天 | operators.py | - |
+| **后验分析** | P1 | - | - | - | ✅ V2.2 |
+| **算子库扩展** | P1 | 3-5 天 | operators.py | - | ✅ V2.1 |
 | **并发安全** | P2 | 1-2 天 | state.py | - |
 
-**总计**: 10-15 天（约 2-3 周）
+**待开发工作量**: 5-9 天（约 1-2 周）
 
 ---
 
@@ -582,7 +604,7 @@ def rolling_rsi(arr, window):
 
 **目标**: 消除致命缺陷，确保因子真实有效
 
-- ✅ 样本外验证（1 天）
+- ✅ 样本外验证（✅ V2.2 已完成）
 - ✅ 数据清洗改进（2-3 天）
 - ✅ 适应度函数扩展（1 天）
 
@@ -598,8 +620,8 @@ def rolling_rsi(arr, window):
 **目标**: 提高因子表达能力
 
 - ✅ GP 参数优化（0.5 天）
-- ✅ 后验分析（2-3 天）
-- ✅ 算子库扩展（3-5 天）
+- ✅ 后验分析（✅ V2.2 已完成）
+- ✅ 算子库扩展（✅ V2.1 已完成）
 
 **交付标准**:
 - 挖掘速度提升 10x
@@ -723,18 +745,18 @@ test_features = D.features(..., start_time=test_start, end_time=test_end)
 
 ## 总结
 
-**当前状态（V2.1）**: 研究原型，技术实现优秀，但金融专业性不足
+**当前状态（V2.2）**: 研究原型，架构清晰，Pipeline 模式已建立
 
 **核心价值**:
 - ✅ 快速验证因子想法
 - ✅ 算法研究和技术探索
 - ✅ 教学和学习遗传编程
+- ✅ 支持样本外验证（Pipeline 架构）
+- ✅ 完整的后验分析（Step1-4 复用）
 
 **核心缺陷**:
-- ❌ 不能直接用于实盘交易
-- ❌ 缺乏样本外验证
-- ❌ 数据清洗粗糙
-- ❌ 适应度函数单一
+- ❌ 数据清洗粗糙（待改进）
+- ❌ 适应度函数单一（待改进）
 
 **改进方向**:
 - 🔴 P0：金融正确性（样本外验证、数据清洗、适应度函数）

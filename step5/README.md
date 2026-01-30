@@ -17,7 +17,14 @@
 
 ## 输出文件
 
-无文件输出，结果直接打印到终端。
+```
+.cache/
+└── {market}_{startdate}_{enddate}__gp_seed{seed}.expression.txt
+```
+
+**expression.txt** - 因子表达式结果
+- 格式: 纯文本，每行一个表达式
+- 文件名包含完整元数据（市场、日期范围、随机种子）
 
 ## 依赖关系
 

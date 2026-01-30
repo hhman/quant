@@ -167,8 +167,7 @@ class FactorMiner:
             SymbolicTransformer 实例
         """
         params = self.gp_config.to_dict()
-        if self.random_state is not None:
-            params["random_state"] = self.random_state
+        params["random_state"] = self.random_state
 
         return SymbolicTransformer(
             function_set=function_set, feature_names=self.features, **params
