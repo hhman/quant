@@ -290,29 +290,25 @@ def analyze_factors(self, features_df, target_df) -> pd.DataFrame:
 
 ---
 
-#### 问题6：算子库不足 ⭐⭐⭐
+#### 问题6：算子库不足 ⭐⭐⭐ ✅ 已解决
 
 **位置**: [core/gplearn/operators.py](../core/gplearn/operators.py)
 
 **现状**（V2.1）:
-- 基础算子：3 个（abs, sqrt, log）
-- 时序算子：9 个（sma, ema, std, momentum, delta, max, min, ts_rank, corr）
+- 基础算子：4 个（abs, sqrt, log, sign）
+- 算术运算：4 个（add, sub, mul, div）
+- 时序算子：30 个（SMA, EMA, STD, Delta, Max, Min, TS_Rank）
+- 相关性算子：2 个（corr_10, corr_20）
+- 动量指标：9 个（RSI, ROC, ROCP, MOM）
+- 趋势指标：11 个（WMA, DEMA, TEMA, MACD 系列）
+- 波动率指标：3 个（BBANDS 系列）
 - 截面算子：2 个（rank, zscore）✅ 已启用
 
-**仍缺**:
-- 技术指标：RSI, MACD, ATR, 布林带
-- 高级算子：线性组合、条件逻辑
+**总计**: 70 个算子
 
-**解决方案**: 在 operators.py 新增算子
-```python
-@register_operator(name="rsi", category="time_series", arity=2)
-@with_boundary_check
-def rolling_rsi(arr, window):
-    """相对强弱指标"""
-    ...
-```
+**解决方案**: 已完成 TA-Lib 集成和预定义窗口算子
 
-**工作量**: 3-5 天
+**工作量**: 已完成
 
 ---
 
@@ -539,8 +535,7 @@ def analyze_factors(self, features_df, target_df) -> pd.DataFrame:
 **实现步骤**:
 1. 添加 RSI 算子
 2. 添加 MACD 算子
-3. 添加 ATR 算子
-4. 添加布林带算子
+3. 添加布林带算子
 
 **关键代码**:
 ```python

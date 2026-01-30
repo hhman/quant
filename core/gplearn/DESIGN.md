@@ -205,72 +205,60 @@ arr = [100.0, 101.0, 102.0,  # 000001 的 3 天
 
 ### 边界检测装饰器
 
-**实现**：`core/gplearn/common/decorators.py:17-55`
+**实现**：`core/gplearn/common/decorators.py:17-94`
 
+装饰器自动检测函数签名，根据 arity 和 window_size 选择边界检测策略：
+- `arity=1`：对时序算子标记边界后的 `window_size` 个位置为 NaN
+- `arity=2`：
+  - 当 `window_size=None` 时，不进行边界检测（用于 add/sub/mul/div 等算术运算）
+  - 当 `window_size > 1` 时，标记边界（用于 corr 等双数组时序算子）
+
+关键逻辑：
 ```python
-def with_boundary_check(func: Callable) -> Callable:
-    """为时序算子添加边界检测"""
-
-    @wraps(func)
-    def wrapper(arr: np.ndarray, window: int = None) -> np.ndarray:
-        # 1. 调用原始算子
-        result = func(arr, window)
-
-        # 2. 获取边界索引
-        boundaries = get_boundary_indices()
-
-        # 3. 标记边界区域
-        for b in boundaries:
-            end_idx = min(b + window, len(result))
-            # 将边界区域设为 NaN（后续会填充为 0）
-            result[b:end_idx] = np.nan
-
-        return result
-
-    return wrapper
+# 跳过第一个边界（起始位置），从第二个边界开始标记
+for b in boundary_indices[1:]:
+    end_idx = min(b + window_size, arr_length)
+    result[b:end_idx] = np.nan
 ```
 
 ### 工作流程示例
 
-```python
-# 数据展平（2 只股票，各 5 天）
-arr = [10.1, 10.2, 10.3, 10.4, 10.5,  # 000001
-       20.1, 20.2, 20.3, 20.4, 20.5]  # 000002
+假设 2 只股票各 5 天数据展平后：
+- `arr = [10.1, 10.2, ..., 10.5, 20.1, 20.2, ..., 20.5]`
+- `boundaries = [0, 5]`（第二只股票从 position 5 开始）
 
-boundaries = [0, 5]  # 000002 从 position 5 开始
-
-# 计算 SMA(3)
-@register_operator(name="sma", category="time_series", arity=2)
-@with_boundary_check  # ← 边界检测装饰器
-def rolling_sma(arr, window):
-    return pd.Series(arr).rolling(window=window).mean()
-
-# 执行流程：
-# 1. 调用 rolling_sma，计算移动平均
-# 2. with_boundary_check 检测到边界 position 5
-# 3. 将 position 5-7 (window=3) 设为 NaN
-# 4. 返回结果：
-#    [nan, nan, 10.2, 10.3, 10.4,   ← 000001（前 2 个是 warmup）
-#     nan, nan, 20.2, 20.3, 20.4]   ← 000002（position 5-7 被删除）
-```
+执行 `sma_20(arr)` 时：
+1. 计算 20 日移动平均
+2. 检测到边界 position 5
+3. 将 position 5-25 标记为 NaN（防止跨股票污染）
+4. 前 20 个和边界后 20 个都是 NaN
 
 ### 支持的时序算子
 
 所有带 `@with_boundary_check` 装饰器的算子：
+
+**时序算子（arity=1）**
 
 | 算子 | 功能 | 边界检测逻辑 |
 |------|------|-------------|
 | `sma` | 简单移动平均 | 删除边界后 `window` 个数据点 |
 | `ema` | 指数移动平均 | 删除边界后 `window` 个数据点 |
 | `std` | 滚动标准差 | 删除边界后 `window` 个数据点 |
-| `momentum` | 动量 | 删除边界后 `window` 个数据点 |
 | `delta` | 一阶差分 | 删除边界后 `window` 个数据点 |
 | `max` / `min` | 滚动最大/最小值 | 删除边界后 `window` 个数据点 |
 | `ts_rank` | 时间序列排名 | 删除边界后 `window` 个数据点 |
 
+**双数组时序算子（arity=2）**
+
+| 算子 | 功能 | 边界检测逻辑 |
+|------|------|-------------|
+| `corr` | 滚动相关系数 | 删除边界后 `window` 个数据点 |
+| `add` / `sub` / `mul` / `div` | 算术运算 | 不进行边界检测（`window_size=None`）|
+
 **关键点**：
 - 装饰器自动处理边界，算子函数本身无需关心
-- 通过 TLS 隐式获取边界，算子签名保持简洁
+- 通过全局变量隐式获取边界，算子签名保持简洁
+- 算术运算算子不进行边界检测，因为它们是逐元素操作，不会跨股票污染
 
 ---
 
@@ -619,52 +607,34 @@ def get_operator(name: str) -> Callable:
 **位置**：`core/gplearn/operators.py`
 
 ```python
-from .common.registry import register_operator
+# arity=1 算子（预定义窗口）
+@register_operator(name="sma_20", category="time_series", arity=1)
+@with_boundary_check(window_size=20)
+def sma_20(arr):
+    return pd.Series(arr).rolling(20).mean().values
 
-@register_operator(name="sma", category="time_series", arity=2)
-@with_boundary_check
-def rolling_sma(arr, window):
-    return pd.Series(arr).rolling(window).mean()
+# arity=2 算子（数组运算）
+@register_operator(name="add", category="basic", arity=2)
+def op_add(arr1, arr2):
+    return arr1 + arr2
 ```
+
+### 时序算子的 arity 选择
+
+**设计决策**：使用 `arity=1` + 预定义窗口，而非 `arity=2` + 运行时参数
+
+**理由**：
+1. Gplearn 在编译阶段构建算子集，预定义窗口避免运行时复杂性
+2. 常用窗口（5, 10, 20, 60, 120, 250）覆盖大部分研究场景
+3. arity=1 的纯函数更简洁，易于测试和组合
 
 ### Gplearn 适配层
 
 **位置**：`core/gplearn/common/registry.py`
 
-```python
-def _validate_window_param(w: Any, default: int = 20) -> int:
-    """验证并标准化 window 参数"""
-    if isinstance(w, np.ndarray):
-        if len(w) > 0 and not np.isnan(w[0]) and not np.isinf(w[0]):
-            return max(1, int(w[0]))
-        else:
-            return default
-    else:
-        if np.isnan(w) or np.isinf(w):
-            return default
-        else:
-            return max(1, int(np.clip(w, 1, 250)))
-
-def _adapt_to_gplearn_arity2(func: Callable, name: str) -> Callable:
-    """将 arity=2 的函数适配为 gplearn 函数"""
-    from gplearn.functions import make_function
-
-    def _wrapper(x, w):
-        w_val = _validate_window_param(w)
-        return func(x, w_val)
-
-    _wrapper.__name__ = name
-    return make_function(function=_wrapper, name=name, arity=2, wrap=False)
-
-def adapt_operator_to_gplearn(func: Callable, arity: int, name: str) -> Callable:
-    """将算子函数适配为 gplearn 函数对象"""
-    if arity == 1:
-        return _adapt_to_gplearn_arity1(func, name)
-    elif arity == 2:
-        return _adapt_to_gplearn_arity2(func, name)
-    elif arity == 3:
-        return _adapt_to_gplearn_arity3(func, name)
-```
+适配层将自定义算子转换为 gplearn 兼容的函数对象：
+- `arity=1`：直接包装，无需额外处理
+- `arity=2`：直接包装，支持双数组运算和时序相关性算子
 
 ### 获取所有算子
 
@@ -742,38 +712,46 @@ class GPConfig:
 
 ## 扩展指南
 
-### 新增时序算子
+### 新增时序算子（arity=1）
 
 ```python
-@register_operator(name="rsi", category="time_series", arity=2)
-@with_boundary_check  # 自动处理边界
-def rolling_rsi(arr: np.ndarray, window: int) -> np.ndarray:
-    """相对强弱指标"""
-    delta = pd.Series(arr).diff()
-    gain = delta.clip(lower=0)
-    loss = (-delta).clip(lower=0)
-    rs = gain.rolling(window).mean() / loss.rolling(window).mean()
-    return (100 - 100 / (1 + rs)).values
+@register_operator(name="rsi_14", category="time_series", arity=1)
+@with_boundary_check(window_size=14)
+def rsi_14(arr):
+    return talib.RSI(arr, timeperiod=14)
+```
+
+### 批量创建时序算子
+
+```python
+for w in [5, 10, 20, 60]:
+    _create_talib_operator(f"rsi_{w}", talib.RSI, w, "momentum")
 ```
 
 ### 新增截面算子
 
 ```python
-@register_operator(name="rank", category="cross_sectional")
-@with_panel_builder  # 自动转换面板
-def cross_sectional_rank(panel: pd.DataFrame) -> pd.DataFrame:
-    """横截面排名"""
+@register_operator(name="rank", category="cross_sectional", arity=1)
+@with_panel_builder
+def cross_sectional_rank(panel):
     return panel.rank(axis=1, pct=True).fillna(0.5)
 ```
 
-### 集成 T-alib 函数
+### 新增算术运算算子（arity=2）
 
 ```python
-@register_operator(name="talib_macd", category="time_series", arity=1)
-@with_boundary_check
-def talib_macd(arr: np.ndarray) -> np.ndarray:
-    import talib
-    return talib.MACD(arr)[0]
+@register_operator(name="add", category="basic", arity=2)
+def op_add(arr1, arr2):
+    return arr1 + arr2
+```
+
+### 新增双数组时序算子（arity=2）
+
+```python
+@register_operator(name="corr_10", category="time_series", arity=2)
+@with_boundary_check(window_size=10)
+def corr_10(arr1, arr2):
+    return pd.Series(arr1).rolling(10).corr(pd.Series(arr2)).values
 ```
 
 ---
@@ -795,10 +773,10 @@ def talib_macd(arr: np.ndarray) -> np.ndarray:
 from core.gplearn.operators import get_operator
 import numpy as np
 
-sma = get_operator("sma")
+sma_20 = get_operator("sma_20")
 arr = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-result = sma(arr, 3)
-print(result)  # [nan, nan, 2.0, 3.0, 4.0]
+result = sma_20(arr)
+print(result)  # [0.0, 0.0, ..., 3.0]（前 20 个被边界检测设为 NaN，再被 nan_to_num 设为 0）
 ```
 
 ---
@@ -807,7 +785,7 @@ print(result)  # [nan, nan, 2.0, 3.0, 4.0]
 
 1. **函数式优先**：简洁、可测试、可组合
 2. **明确边界**：个人研究 + Qlib + 多线程训练 + 本地
-3. **实用主义**：全局状态、print、配置文件都是务实的最优解
+3. **实用主义**：全局状态、预定义窗口、print 调试
 4. **装饰器驱动**：零学习成本的扩展机制
 5. **拒绝过度工程**：不添加不需要的抽象层
 

@@ -14,48 +14,116 @@ from .state import get_index, get_boundary_indices
 from .panel import build_dual_panel, clean_panel
 
 
-def with_boundary_check(func: Callable) -> Callable:
+def with_boundary_check(
+    func: Callable = None, *, window_size: int | None = 1
+) -> Callable:
     """
     为时序算子添加边界检测，防止跨股票污染
 
     Args:
         func: 原始算子函数
+        window_size: 窗口大小
+            - arity=1 的时序算子：必须指定窗口大小（如 20）
+            - arity=2 的相关性算子：必须指定窗口大小（如 10）
+            - arity=2 的算术运算：设为 None，不进行边界检测
+            - 默认值：1（向后兼容，但不推荐使用）
 
     Returns:
         包装后的函数
 
     使用示例：
-        @register_operator(name="sma", category="time_series")
-        @with_boundary_check
-        def rolling_sma(arr, window):
-            return pd.Series(arr).rolling(window).mean()
+        # arity=1 的时序算子（必须指定 window_size）
+        @register_operator(name="sma_20", category="time_series", arity=1)
+        @with_boundary_check(window_size=20)
+        def sma_20(arr):
+            return pd.Series(arr).rolling(20).mean().values
+
+        # arity=2 的相关性算子（必须指定 window_size）
+        @register_operator(name="corr_10", category="time_series", arity=2)
+        @with_boundary_check(window_size=10)
+        def corr_10(arr1, arr2):
+            return pd.Series(arr1).rolling(10).corr(pd.Series(arr2))
+
+        # arity=2 的算术运算（设为 None，不进行边界检测）
+        @register_operator(name="add", category="basic", arity=2)
+        @with_boundary_check(window_size=None)
+        def op_add(arr1, arr2):
+            return arr1 + arr2
     """
 
-    @wraps(func)
-    def wrapper(arr: np.ndarray, window: int = None) -> np.ndarray:
-        result = func(arr, window)
+    def decorator(f: Callable) -> Callable:
+        import inspect
 
-        boundary_indices = get_boundary_indices()
-        if not boundary_indices:
-            return result
+        # 检查函数签名，确定参数数量
+        sig = inspect.signature(f)
+        n_params = len(
+            [
+                p
+                for p in sig.parameters.values()
+                if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+            ]
+        )
 
-        arr_length = len(result)
-        boundary_mask = np.zeros(arr_length, dtype=bool)
+        # 根据 arity 定义不同的 wrapper
+        if n_params == 1:
 
-        if window is None:
-            window = 1
+            @wraps(f)
+            def wrapper(arr: np.ndarray) -> np.ndarray:
+                result = f(arr)
 
-        # 跳过第一个边界（起始位置），只标记股票间的边界
-        # boundaries[0] = 0 是第一只股票的起始位置，不应被标记
-        for b in boundary_indices[1:]:
-            start_idx = b
-            end_idx = min(b + window, arr_length)
-            boundary_mask[start_idx:end_idx] = True
+                # window_size=None 表示不进行边界检测
+                if window_size is None:
+                    return result
 
-        result[boundary_mask] = np.nan
-        return result
+                boundary_indices = get_boundary_indices()
+                if not boundary_indices:
+                    return result
 
-    return wrapper
+                arr_length = len(result)
+                boundary_mask = np.zeros(arr_length, dtype=bool)
+
+                for b in boundary_indices[1:]:
+                    start_idx = b
+                    end_idx = min(b + window_size, arr_length)
+                    boundary_mask[start_idx:end_idx] = True
+
+                result[boundary_mask] = np.nan
+                return result
+
+        elif n_params == 2:
+
+            @wraps(f)
+            def wrapper(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
+                result = f(arr1, arr2)
+
+                # window_size=None 表示不进行边界检测
+                if window_size is None:
+                    return result
+
+                boundary_indices = get_boundary_indices()
+                if not boundary_indices:
+                    return result
+
+                arr_length = len(result)
+                boundary_mask = np.zeros(arr_length, dtype=bool)
+
+                for b in boundary_indices[1:]:
+                    start_idx = b
+                    end_idx = min(b + window_size, arr_length)
+                    boundary_mask[start_idx:end_idx] = True
+
+                result[boundary_mask] = np.nan
+                return result
+
+        else:
+            raise ValueError(f"不支持的参数数量: {n_params}，仅支持 arity=1 或 arity=2")
+
+        return wrapper
+
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
 
 
 def _clean_dual_panel(

@@ -254,27 +254,7 @@ def _adapt_to_gplearn_arity2(func: Callable, name: str) -> Callable:
     except ImportError:
         raise ImportError("请先安装 gplearn: pip install gplearn")
 
-    def _wrapper(x, w):
-        w_val = _validate_window_param(w)
-        return func(x, w_val)
-
-    _wrapper.__name__ = name
-    return make_function(function=_wrapper, name=name, arity=2, wrap=False)
-
-
-def _adapt_to_gplearn_arity3(func: Callable, name: str) -> Callable:
-    """将 arity=3 的函数适配为 gplearn 函数"""
-    try:
-        from gplearn.functions import make_function
-    except ImportError:
-        raise ImportError("请先安装 gplearn: pip install gplearn")
-
-    def _wrapper(x, y, w):
-        w_val = _validate_window_param(w)
-        return func(x, y, w_val)
-
-    _wrapper.__name__ = name
-    return make_function(function=_wrapper, name=name, arity=3, wrap=False)
+    return make_function(function=func, name=name, arity=2, wrap=False)
 
 
 def adapt_operator_to_gplearn(func: Callable, arity: int, name: str) -> Callable:
@@ -293,8 +273,6 @@ def adapt_operator_to_gplearn(func: Callable, arity: int, name: str) -> Callable
         return _adapt_to_gplearn_arity1(func, name)
     elif arity == 2:
         return _adapt_to_gplearn_arity2(func, name)
-    elif arity == 3:
-        return _adapt_to_gplearn_arity3(func, name)
     else:
         raise ValueError(f"不支持的 arity: {arity}")
 
@@ -330,8 +308,17 @@ def get_all_operators() -> List[Callable]:
         func = get_operator(op_name)
         meta = _get_operator_meta(op_name)
         arity = meta["arity"]
+        category = meta.get("category", "")
 
-        gplearn_func = adapt_operator_to_gplearn(func, arity, op_name)
+        # 对于被装饰器包装的函数，获取原始函数
+        # 截面算子需要使用包装后的函数（带有 with_panel_builder）
+        # 其他算子使用原始函数
+        if hasattr(func, "__wrapped__") and category != "cross_sectional":
+            original_func = func.__wrapped__
+        else:
+            original_func = func
+
+        gplearn_func = adapt_operator_to_gplearn(original_func, arity, op_name)
         operators.append(gplearn_func)
 
     return operators
@@ -372,7 +359,15 @@ def get_operators_by_category(category: str) -> List[Callable]:
         meta = _get_operator_meta(op_name)
         if meta["category"] == category:
             func = get_operator(op_name)
-            gplearn_func = adapt_operator_to_gplearn(func, meta["arity"], op_name)
+            # 对于被装饰器包装的函数，获取原始函数
+            # 截面算子需要使用包装后的函数（带有 with_panel_builder）
+            if hasattr(func, "__wrapped__") and category != "cross_sectional":
+                original_func = func.__wrapped__
+            else:
+                original_func = func
+            gplearn_func = adapt_operator_to_gplearn(
+                original_func, meta["arity"], op_name
+            )
             operators.append(gplearn_func)
 
     return operators
