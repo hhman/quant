@@ -1,14 +1,4 @@
-"""
-面板数据转换模块
-
-提供扁平数据与面板数据之间的转换功能：
-- 扁平数组 → 面板数据
-- 面板数据 → 扁平数组
-- 双面板数据构建
-- 数据清洗
-- DataFrame → 扁平数组 + MultiIndex + 边界索引
-- MultiIndex DataFrame → GP 训练数据（展平 + 边界计算）
-"""
+"""Panel数据转换模块，处理MultiIndex DataFrame与Panel数据之间的转换。"""
 
 import pandas as pd
 import numpy as np
@@ -16,29 +6,27 @@ from typing import Tuple, List
 
 
 def flatten_to_panel(arr: np.ndarray, index: pd.MultiIndex) -> pd.DataFrame:
-    """
-    扁平数组 → 面板数据
+    """将扁平化数组转换为Panel格式的DataFrame。
 
     Args:
-        arr: 扁平数组 (n_samples,)
-        index: MultiIndex (instrument, datetime)
+        arr: 扁平化数组，形状为(n_samples,)
+        index: MultiIndex，层级为(instrument, datetime)
 
     Returns:
-        面板数据 (n_dates, n_stocks)
+        Panel格式的DataFrame，形状为(n_dates, n_stocks)
     """
     df = pd.DataFrame({"value": arr}, index=index)
     return df["value"].unstack(level=0)
 
 
 def panel_to_flatten(panel: pd.DataFrame) -> np.ndarray:
-    """
-    面板数据 → 扁平数组
+    """将Panel格式的DataFrame转换为扁平化数组。
 
     Args:
-        panel: 面板数据 (n_dates, n_stocks)
+        panel: Panel格式的DataFrame，形状为(n_dates, n_stocks)
 
     Returns:
-        扁平数组 (n_samples,)
+        扁平化数组，形状为(n_samples,)
     """
     return panel.stack().values
 
@@ -46,19 +34,18 @@ def panel_to_flatten(panel: pd.DataFrame) -> np.ndarray:
 def clean_panel(
     panel: pd.DataFrame, axis: int = 1, min_samples: int = 1
 ) -> pd.DataFrame:
-    """
-    清洗面板数据：删除全 NaN 列/行
+    """清理Panel数据，删除全部为NaN的行或列。
 
     Args:
-        panel: 面板数据
-        axis: 删除维度 (0=行, 1=列)
-        min_samples: 最小样本数
+        panel: Panel格式的DataFrame
+        axis: 清理轴（0=删除行，1=删除列）
+        min_samples: 最小样本数量要求
 
     Returns:
-        清洗后的面板数据
+        清理后的DataFrame
 
     Raises:
-        ValueError: 样本量不足
+        ValueError: 当清理后的样本数小于最小要求时
     """
     if axis == 0:
         valid_mask = ~panel.isna().all(axis=1)
@@ -69,7 +56,7 @@ def clean_panel(
 
     n_samples = result.shape[1] if axis == 0 else result.shape[0]
     if n_samples < min_samples:
-        raise ValueError(f"样本量不足: {n_samples} < {min_samples}")
+        raise ValueError(f"清理后样本数不足: {n_samples} < {min_samples}")
 
     return result
 
@@ -77,16 +64,15 @@ def clean_panel(
 def build_dual_panel(
     y_true: np.ndarray, y_pred: np.ndarray, index: pd.MultiIndex
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    同时构建 y_true 和 y_pred 的面板数据
+    """构建包含真实值和预测值的Panel数据。
 
     Args:
-        y_true: 真实值（扁平）
-        y_pred: 预测值（扁平）
+        y_true: 真实值数组
+        y_pred: 预测值数组
         index: MultiIndex
 
     Returns:
-        (y_true_panel, y_pred_panel)
+        (y_true_panel, y_pred_panel) 元组
     """
     df = pd.DataFrame({"y_true": y_true, "y_pred": y_pred}, index=index)
 
@@ -99,40 +85,38 @@ def build_dual_panel(
 def dataframe_to_flatten(
     df: pd.DataFrame,
 ) -> Tuple[np.ndarray, pd.MultiIndex, List[int]]:
-    """
-    将 MultiIndex DataFrame 展平为 1D 数组
+    """将MultiIndex DataFrame转换为扁平化数组和边界信息。
 
     Args:
-        df: MultiIndex DataFrame (instrument, datetime)
+        df: MultiIndex DataFrame，层级为(instrument, datetime)
 
     Returns:
-        arr: 展平的 1D 数组
+        arr: 扁平化的1D数组
         index: MultiIndex
-        boundaries: 边界索引列表（每只股票的起始位置）
+        boundaries: 每个instrument的起始索引列表
 
     Example:
         >>> df = pd.DataFrame(..., index=pd.MultiIndex.from_tuples(...))
         >>> arr, index, boundaries = dataframe_to_flatten(df)
     """
     if not isinstance(df.index, pd.MultiIndex):
-        raise ValueError("DataFrame 必须有 MultiIndex")
+        raise ValueError("DataFrame必须具有MultiIndex")
 
     index = df.index
-    arr = df.values.flatten(order="F")  # 按列展平（先股票后时间）
+    arr = df.values.flatten(order="F")
     boundaries = calc_boundaries(index)
 
     return arr, index, boundaries
 
 
 def calc_boundaries(index: pd.MultiIndex) -> List[int]:
-    """
-    计算每只股票的起始位置
+    """计算每个instrument在MultiIndex中的起始位置。
 
     Args:
-        index: MultiIndex (instrument, datetime)
+        index: MultiIndex，层级为(instrument, datetime)
 
     Returns:
-        边界索引列表（每只股票的起始位置）
+        边界索引列表
 
     Example:
         >>> index = pd.MultiIndex.from_tuples([
@@ -141,7 +125,7 @@ def calc_boundaries(index: pd.MultiIndex) -> List[int]:
         ...     ('stock2', '2020-01-01'),
         ... ])
         >>> calc_boundaries(index)
-        [0, 2]  # stock1 从 0 开始，stock2 从 2 开始
+        [0, 2]
     """
     if not isinstance(index, pd.MultiIndex):
         return []
@@ -158,26 +142,24 @@ def calc_boundaries(index: pd.MultiIndex) -> List[int]:
 
 
 def flatten_features(features_df: pd.DataFrame) -> np.ndarray:
-    """
-    展平特征 DataFrame
+    """将特征DataFrame转换为扁平化数组。
 
     Args:
-        features_df: (n_samples, n_features) MultiIndex DataFrame
+        features_df: MultiIndex DataFrame，形状为(n_samples, n_features)
 
     Returns:
-        X: (n_samples, n_features) 展平的特征数组
+        特征数组，形状为(n_samples, n_features)
     """
     return features_df.values.flatten(order="F").reshape(-1, features_df.shape[1])
 
 
 def flatten_target(target_df: pd.DataFrame) -> np.ndarray:
-    """
-    展平标签 DataFrame
+    """将目标DataFrame转换为扁平化数组。
 
     Args:
-        target_df: (n_samples, 1) MultiIndex DataFrame
+        target_df: MultiIndex DataFrame，形状为(n_samples, 1)
 
     Returns:
-        y: (n_samples,) 展平的标签数组
+        目标数组，形状为(n_samples,)
     """
     return target_df.values.flatten()

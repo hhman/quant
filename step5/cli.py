@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Step 5 CLI: 遗传算法因子挖掘"""
+"""Step 5 CLI:"""
 
 import sys
 import argparse
@@ -15,12 +15,12 @@ from utils.cli_args import (
 
 
 def parse_args() -> argparse.Namespace:
-    """定义并解析 CLI 参数"""
+    """CLI"""
     parser = argparse.ArgumentParser(
-        description="Step 5: 遗传算法因子挖掘",
+        description="Step 5: ",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例:
+:
   python step5/cli.py --market csi300 --start-date 2020-01-01 --end-date 2023-12-31
         """,
     )
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def normalize_args(args: argparse.Namespace) -> dict:
-    """校验和标准化参数"""
+    """"""
     market = validate_market(args.market)
     start_date, end_date = parse_date_range(args.start_date, args.end_date)
     provider_uri = resolve_provider_uri()
@@ -48,12 +48,12 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 
 def main():
-    """主入口函数"""
+    """"""
     args = parse_args()
     params = normalize_args(args)
 
-    # 调用业务逻辑
-    from step5.遗传算法因子挖掘 import mine_factors_with_gp
+    # 执行GP因子挖掘
+    from step5.genetic_algorithm_factor_mining import mine_factors_with_gp
 
     mine_factors_with_gp(
         provider_uri=params["provider_uri"],

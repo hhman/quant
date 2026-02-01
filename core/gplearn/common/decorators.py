@@ -1,9 +1,9 @@
 """
-通用装饰器模块
 
-提供算子和适应度函数使用的装饰器：
-- 边界检测装饰器
-- 面板数据转换装饰器
+
+
+-
+-
 """
 
 from functools import wraps
@@ -18,33 +18,33 @@ def with_boundary_check(
     func: Callable = None, *, window_size: int | None = 1
 ) -> Callable:
     """
-    为时序算子添加边界检测，防止跨股票污染
+
 
     Args:
-        func: 原始算子函数
-        window_size: 窗口大小
-            - arity=1 的时序算子：必须指定窗口大小（如 20）
-            - arity=2 的相关性算子：必须指定窗口大小（如 10）
-            - arity=2 的算术运算：设为 None，不进行边界检测
-            - 默认值：1（向后兼容，但不推荐使用）
+        func:
+        window_size:
+            - arity=1  20
+            - arity=2  10
+            - arity=2  None
+            - 1
 
     Returns:
-        包装后的函数
 
-    使用示例：
-        # arity=1 的时序算子（必须指定 window_size）
+
+
+        # arity=1  window_size
         @register_operator(name="sma_20", category="time_series", arity=1)
         @with_boundary_check(window_size=20)
         def sma_20(arr):
             return pd.Series(arr).rolling(20).mean().values
 
-        # arity=2 的相关性算子（必须指定 window_size）
+        # arity=2  window_size
         @register_operator(name="corr_10", category="time_series", arity=2)
         @with_boundary_check(window_size=10)
         def corr_10(arr1, arr2):
             return pd.Series(arr1).rolling(10).corr(pd.Series(arr2))
 
-        # arity=2 的算术运算（设为 None，不进行边界检测）
+        # arity=2  None
         @register_operator(name="add", category="basic", arity=2)
         @with_boundary_check(window_size=None)
         def op_add(arr1, arr2):
@@ -52,9 +52,17 @@ def with_boundary_check(
     """
 
     def decorator(f: Callable) -> Callable:
+        """装饰器内部函数，用于包装被装饰的函数。
+
+        Args:
+            f: 被装饰的函数
+
+        Returns:
+            包装后的函数
+        """
         import inspect
 
-        # 检查函数签名，确定参数数量
+        # 获取函数参数个数
         sig = inspect.signature(f)
         n_params = len(
             [
@@ -64,14 +72,22 @@ def with_boundary_check(
             ]
         )
 
-        # 根据 arity 定义不同的 wrapper
+        #  arity  wrapper
         if n_params == 1:
 
             @wraps(f)
             def wrapper(arr: np.ndarray) -> np.ndarray:
+                """单参数函数的包装器，处理边界检查。
+
+                Args:
+                    arr: 输入数组
+
+                Returns:
+                    处理后的数组，边界位置被设为NaN
+                """
                 result = f(arr)
 
-                # window_size=None 表示不进行边界检测
+                # window_size=None 表示不进行边界检查
                 if window_size is None:
                     return result
 
@@ -94,9 +110,18 @@ def with_boundary_check(
 
             @wraps(f)
             def wrapper(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
+                """双参数函数的包装器，处理边界检查。
+
+                Args:
+                    arr1: 第一个输入数组
+                    arr2: 第二个输入数组
+
+                Returns:
+                    处理后的数组，边界位置被设为NaN
+                """
                 result = f(arr1, arr2)
 
-                # window_size=None 表示不进行边界检测
+                # window_size=None 表示不进行边界检查
                 if window_size is None:
                     return result
 
@@ -116,7 +141,7 @@ def with_boundary_check(
                 return result
 
         else:
-            raise ValueError(f"不支持的参数数量: {n_params}，仅支持 arity=1 或 arity=2")
+            raise ValueError(f": {n_params} arity=1  arity=2")
 
         return wrapper
 
@@ -133,16 +158,16 @@ def _clean_dual_panel(
     clean_axis: int,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    清洗双面板数据
+
 
     Args:
-        y_true_panel: 真实值面板
-        y_pred_panel: 预测值面板
-        min_samples: 最小样本数
-        clean_axis: 清洗维度
+        y_true_panel:
+        y_pred_panel:
+        min_samples:
+        clean_axis:
 
     Returns:
-        (清洗后的 y_true_panel, 清洗后的 y_pred_panel)
+        ( y_true_panel,  y_pred_panel)
     """
     y_true_panel = clean_panel(y_true_panel, axis=clean_axis, min_samples=min_samples)
     y_pred_panel = clean_panel(y_pred_panel, axis=clean_axis, min_samples=min_samples)
@@ -152,15 +177,17 @@ def _clean_dual_panel(
 def with_panel_convert(
     min_samples: int = 100,
     clean_axis: int = 1,
-):
-    """
-    为适应度函数添加面板数据转换
+) -> Callable:
+    """面板数据转换装饰器，将一维数组转换为面板数据格式。
 
     Args:
-        min_samples: 最小样本数
-        clean_axis: 清洗维度 (0=行, 1=列)
+        min_samples: 最小样本数，用于清洗数据
+        clean_axis: 清洗轴 (0=按时间清洗, 1=按股票清洗)
 
-    使用示例：
+    Returns:
+        装饰器函数
+
+    Example:
         @register_fitness(name="rank_ic")
         @with_panel_convert(min_samples=100)
         def rank_ic_fitness(y_true_panel, y_pred_panel):
@@ -169,6 +196,15 @@ def with_panel_convert(
     """
 
     def decorator(func: Callable) -> Callable:
+        """内部装饰器函数。
+
+        Args:
+            func: 被装饰的适应度函数
+
+        Returns:
+            包装后的函数
+        """
+
         @wraps(func)
         def wrapper(
             y_true: np.ndarray,
@@ -176,7 +212,19 @@ def with_panel_convert(
             index: pd.MultiIndex = None,
             boundary_indices: list = None,
             **kwargs,
-        ):
+        ) -> float:
+            """包装器函数，将数组转换为面板数据后调用原函数。
+
+            Args:
+                y_true: 真实值数组
+                y_pred: 预测值数组
+                index: 多重索引，如果为None则从全局状态获取
+                boundary_indices: 边界索引列表（未使用）
+                **kwargs: 其他关键字参数
+
+            Returns:
+                适应度函数的计算结果
+            """
             if index is None:
                 index = get_index()
 
@@ -193,16 +241,15 @@ def with_panel_convert(
 
 
 def with_panel_builder(func: Callable) -> Callable:
-    """
-    为截面算子添加面板数据转换
+    """面板构建装饰器，将一维数组转换为面板数据后应用函数。
 
     Args:
-        func: 原始算子函数
+        func: 接收面板数据（DataFrame）的函数
 
     Returns:
-        包装后的函数
+        包装后的函数，将一维数组转换为面板数据后调用原函数
 
-    使用示例：
+    Example:
         @register_operator(name="rank", category="cross_sectional")
         @with_panel_builder
         def cross_sectional_rank(panel):
@@ -211,15 +258,21 @@ def with_panel_builder(func: Callable) -> Callable:
 
     @wraps(func)
     def wrapper(arr: np.ndarray) -> np.ndarray:
+        """包装器函数，将一维数组转换为面板数据后调用原函数。
+
+        Args:
+            arr: 输入的一维数组
+
+        Returns:
+            处理后的一维数组
+        """
         try:
             index = get_index()
         except RuntimeError:
-            # Index 未设置（gplearn 测试阶段），直接返回 arr
-            # 这样可以满足 gplearn 的 arity 测试要求
+            # 无法获取索引时，直接返回原数组（非gplearn环境）
             return arr
 
-        # 如果输入数组长度与 index 长度不匹配（gplearn 测试阶段），
-        # 直接返回 arr，避免索引长度不匹配的错误
+        # 数组长度与索引长度不匹配时，直接返回原数组
         if len(arr) != len(index):
             return arr
 

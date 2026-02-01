@@ -1,7 +1,7 @@
 """
-Gplearn 适应度函数库
+Gplearn
 
-提供基于面板数据的适应度计算函数。
+
 """
 
 import pandas as pd
@@ -10,7 +10,7 @@ from .common.registry import register_fitness, get_fitness, list_registered_fitn
 from .common.decorators import with_panel_convert
 
 
-# ==================== 适应度函数 ====================
+# ====================  ====================
 
 
 @register_fitness(name="rank_ic")
@@ -20,9 +20,9 @@ def rank_ic_fitness(
     y_pred_panel: pd.DataFrame,
 ) -> float:
     """
-    Rank IC 适应度函数
+    Rank IC
 
-    计算预测值与真实值的 Spearman 相关系数的均值。
+     Spearman
     """
     ic_series = y_pred_panel.corrwith(y_true_panel, axis=1, method="spearman")
 

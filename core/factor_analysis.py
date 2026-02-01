@@ -28,7 +28,7 @@ def ext_out_mad(group: pd.DataFrame, factor_list: List[str]) -> pd.DataFrame:
 def ext_out_3std(
     group: pd.DataFrame, factor_list: List[str], noise_std: float = 1e-10
 ) -> pd.DataFrame:
-    """3-sigma 异常值移除并添加噪音确保唯一的分箱边界。"""
+    """3-sigma"""
     for factor_name in factor_list:
         factor = group[factor_name]
         noise = np.random.normal(0, noise_std, size=len(factor))
@@ -61,20 +61,20 @@ def neutralize_industry_marketcap(
     eps: float = 1e-8,
 ) -> pd.DataFrame:
     """
-    【单日截面】行业市值中性化（专用版本，内存优化）
 
-    对每个因子执行：factor ~ log(total_mv) + industry_dummies，WLS权重为sqrt(float_mv)
+
+    factor ~ log(total_mv) + industry_dummiesWLSsqrt(float_mv)
 
     Args:
-        group: pd.DataFrame 单日截面数据，index为(instrument, datetime)
-        factor_list: List[str] 需要中性化的因子列名
-        total_mv_col: str 总市值列名（将在函数内取对数）
-        industry_col: str 行业分类列名（将转换为哑变量）
-        float_mv_col: str 流通市值列名（将在函数内取平方根作为权重）
-        eps: float 防止权重为0的保护值
+        group: pd.DataFrame index(instrument, datetime)
+        factor_list: List[str]
+        total_mv_col: str
+        industry_col: str
+        float_mv_col: str
+        eps: float 0
 
     Returns:
-        pd.DataFrame 仅包含中性化后的因子列（残差）
+        pd.DataFrame
     """
     if not factor_list:
         return pd.DataFrame(index=group.index)
@@ -85,36 +85,34 @@ def neutralize_industry_marketcap(
         else "unknown_dt"
     )
 
-    # 1) 预先构造风格变量（一次性计算，所有因子共享）
+    # 1)
     log_mv = np.log(group[total_mv_col].astype("float64").clip(lower=eps))
     X_continuous = pd.DataFrame({"log_mv": log_mv}, index=group.index)
 
-    # 行业哑变量
+    #
     X_dummies = pd.get_dummies(
         group[industry_col], drop_first=True, prefix=industry_col, dtype=float
     )
     if X_dummies.empty:
-        print(
-            f"[neutralize_industry_marketcap] {dt} 行业只有一个类别，回归仅使用对数市值"
-        )
+        print(f"[neutralize_industry_marketcap] {dt} ")
 
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
-    # 权重（一次性计算）
+    #
     w_all = np.sqrt(group[float_mv_col].astype("float64").clip(lower=eps)).rename("_w")
     w_mean = w_all.mean()
     if w_mean <= eps:
         w_mean = 1.0
     w_all = (w_all / w_mean).rename("_w")
 
-    # 2) 预分配结果容器（保持每列的原始dtype）
+    # 2) dtype
     result = group[factor_list].copy()
-    # 用NaN填充（避免保留原始数据）
+    # NaN
     result.loc[:, :] = np.nan
 
-    # 3) 按因子回归（复用X_styles和w_all）
+    # 3) X_stylesw_all
     for factor_name in factor_list:
-        # 构造回归数据（只包含当前因子 + 风格 + 权重）
+        #  +  +
         reg_data = pd.concat(
             [group[[factor_name]].astype("float64"), X_styles, w_all],
             axis=1,
@@ -125,15 +123,15 @@ def neutralize_industry_marketcap(
             drop_ratio = (before_drop - len(reg_data)) / before_drop
             if drop_ratio > 0.1:
                 print(
-                    f"[neutralize_industry_marketcap] {dt} {factor_name} dropna 丢弃 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
+                    f"[neutralize_industry_marketcap] {dt} {factor_name} dropna  {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
                 )
 
-        n_params = len(X_styles.columns) + 2  # 截距 + 因子 + 风格
+        n_params = len(X_styles.columns) + 2  #  +  +
         if len(reg_data) < n_params:
             print(
-                f"[neutralize_industry_marketcap] {dt} {factor_name} 样本 {len(reg_data)} 少于所需 {n_params}，置 NaN"
+                f"[neutralize_industry_marketcap] {dt} {factor_name}  {len(reg_data)}  {n_params} NaN"
             )
-            # result[factor_name] 已经是NaN，无需操作
+            # result[factor_name] NaN
             continue
 
         X_reg = sm.add_constant(reg_data[X_styles.columns], has_constant="add")
@@ -144,20 +142,14 @@ def neutralize_industry_marketcap(
             residual = model.resid.astype(group[factor_name].dtype, copy=False)
             result.loc[residual.index, factor_name] = residual
 
-            # 回归质量诊断
+            #
             if model.rsquared < 0.1:
-                print(
-                    f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}，拟合质量较低"
-                )
+                print(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
             elif model.rsquared < 0.05:
-                print(
-                    f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}，拟合质量很差"
-                )
+                print(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
         except Exception as e:
-            print(
-                f"[neutralize_industry_marketcap] {dt} {factor_name} 回归失败：{e}，置 NaN"
-            )
-            # result[factor_name] 已经是NaN，无需操作
+            print(f"[neutralize_industry_marketcap] {dt} {factor_name} {e} NaN")
+            # result[factor_name] NaN
 
     return result
 
@@ -172,24 +164,24 @@ def factor_return_industry_marketcap(
     eps: float = 1e-8,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    【单日截面】因子收益回归（专用版本，内存优化）
 
-    对每个因子factor和每个持仓周期ret_col做截面回归：
+
+    factorret_col
         ret = β0 + β1*factor + β2*log(total_mv) + Σβj*industry_j + ε
-    WLS权重：sqrt(float_mv)
+    WLSsqrt(float_mv)
 
     Args:
-        group: pd.DataFrame 单日截面数据，index为(instrument, datetime)
-        factor_list: List[str] 因子列名
-        ret_list: List[str] 收益率列名
-        total_mv_col: str 总市值列名（将在函数内取对数）
-        industry_col: str 行业分类列名（将转换为哑变量）
-        float_mv_col: str 流通市值列名（将在函数内取平方根作为权重）
-        eps: float 防止权重为0的保护值
+        group: pd.DataFrame index(instrument, datetime)
+        factor_list: List[str]
+        ret_list: List[str]
+        total_mv_col: str
+        industry_col: str
+        float_mv_col: str
+        eps: float 0
 
     Returns:
-        coef_df: 系数时间序列（datetime索引，列名{factor}_{ret}）
-        t_df: t值时间序列（datetime索引，列名{factor}_{ret}）
+        coef_df: datetime{factor}_{ret}
+        t_df: tdatetime{factor}_{ret}
     """
     if not factor_list or not ret_list:
         return pd.DataFrame(), pd.DataFrame()
@@ -200,39 +192,39 @@ def factor_return_industry_marketcap(
         else "unknown_dt"
     )
 
-    # 1) 预先构造风格变量（所有回归共享）
+    # 1)
     log_mv = np.log(group[total_mv_col].astype("float64").clip(lower=eps))
     X_continuous = pd.DataFrame({"log_mv": log_mv}, index=group.index)
 
-    # 行业哑变量
+    #
     X_dummies = pd.get_dummies(
         group[industry_col], drop_first=True, prefix=industry_col, dtype=float
     )
     if X_dummies.empty:
-        print(f"[factor_return] {dt} 行业只有一个类别，回归仅使用对数市值")
+        print(f"[factor_return] {dt} ")
 
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
-    # 权重（一次性计算）
+    #
     w_all = np.sqrt(group[float_mv_col].astype("float64").clip(lower=eps)).rename("_w")
     w_mean = w_all.mean()
     if w_mean <= eps:
         w_mean = 1.0
     w_all = (w_all / w_mean).rename("_w")
 
-    # 2) 执行回归：因子 × 收益率
+    # 2)  ×
     coef_row = {}
     t_row = {}
 
     for factor_name in factor_list:
-        # 构造包含该因子的X（所有ret_col共享）
+        # Xret_col
         base_X = pd.concat([group[[factor_name]].astype("float64"), X_styles], axis=1)
 
         for ret_col in ret_list:
             if group[ret_col].dropna().empty:
                 continue
 
-            # 构造回归数据
+            #
             reg_data = pd.concat(
                 [group[[ret_col]].astype("float64"), base_X, w_all],
                 axis=1,
@@ -243,20 +235,20 @@ def factor_return_industry_marketcap(
                 drop_ratio = (before_drop - len(reg_data)) / before_drop
                 if drop_ratio > 0.1:
                     print(
-                        f"[factor_return] {dt} {factor_name}-{ret_col} dropna 丢弃 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
+                        f"[factor_return] {dt} {factor_name}-{ret_col} dropna  {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
                     )
 
-            n_params = base_X.shape[1] + 1  # 截距 + 因子 + 风格
+            n_params = base_X.shape[1] + 1  #  +  +
             col_name = f"{factor_name}_{ret_col}"
             if len(reg_data) < n_params:
                 print(
-                    f"[factor_return] {dt} 跳过 {factor_name} 对 {ret_col} 的回归：样本 {len(reg_data)} < 所需 {n_params}，置 NaN"
+                    f"[factor_return] {dt}  {factor_name}  {ret_col}  {len(reg_data)} <  {n_params} NaN"
                 )
                 coef_row[col_name] = np.nan
                 t_row[col_name] = np.nan
                 continue
 
-            # 回归
+            #
             X_reg = sm.add_constant(reg_data.drop(columns=[ret_col, "_w"]))
             Y_reg = reg_data[ret_col]
             w_reg = reg_data["_w"]
@@ -266,19 +258,17 @@ def factor_return_industry_marketcap(
                 coef_row[col_name] = model.params.get(factor_name, np.nan)
                 t_row[col_name] = model.tvalues.get(factor_name, np.nan)
 
-                # 回归质量诊断
+                #
                 if model.rsquared < 0.1:
                     print(
-                        f"[factor_return] {dt} {factor_name}-{ret_col} R²={model.rsquared:.3f}，拟合质量较低"
+                        f"[factor_return] {dt} {factor_name}-{ret_col} R²={model.rsquared:.3f}"
                     )
             except Exception as e:
-                print(
-                    f"[factor_return] {dt} {factor_name} 对 {ret_col} 的回归失败（{e}），置 NaN"
-                )
+                print(f"[factor_return] {dt} {factor_name}  {ret_col} {e} NaN")
                 coef_row[col_name] = np.nan
                 t_row[col_name] = np.nan
 
-    # 3) 构造结果DataFrame
+    # 3) DataFrame
     coef_df = pd.DataFrame([coef_row], index=[dt])
     t_df = pd.DataFrame([t_row], index=[dt])
 
@@ -294,23 +284,31 @@ def summarize_ic(
     dropna: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    针对多个因子 × 多个收益列计算 IC / RankIC 及摘要指标。
+    ×  IC / RankIC
 
-    入参：
-        group: pd.DataFrame，包含因子列与收益列
-        factor_list: List[str] 因子列名
-        ret_list: List[str] 收益列名
-        date_col: str 日期列名（用于 calc_ic）
-        dropna: bool 是否在 calc_ic 中丢弃缺失
 
-    返回：
-        ic_map: {(fac, ret): IC 序列}
-        ric_map: {(fac, ret): RankIC 序列}
-        ic_summary_df: 各 (fac, ret) 的 IC 汇总
-        ric_summary_df: 各 (fac, ret) 的 RankIC 汇总
+       group: pd.DataFrame
+       factor_list: List[str]
+       ret_list: List[str]
+       date_col: str  calc_ic
+       dropna: bool  calc_ic
+
+
+       ic_map: {(fac, ret): IC }
+       ric_map: {(fac, ret): RankIC }
+       ic_summary_df:  (fac, ret)  IC
+       ric_summary_df:  (fac, ret)  RankIC
     """
 
     def _summary(series: pd.Series) -> pd.Series:
+        """计算IC序列的统计摘要。
+
+        Args:
+            series: IC值序列
+
+        Returns:
+            包含IC均值、标准差、IR、t统计量、胜率等指标的Series
+        """
         s = pd.Series(series).dropna()
         if s.empty:
             return pd.Series(dtype=float)
@@ -323,12 +321,12 @@ def summarize_ic(
         gt002_rate = (s.abs() > 0.02).sum() / len(s)
         return pd.Series(
             {
-                "IC序列均值": mean,
-                "IC序列标准差": std,
-                "IR比率": icir,
-                "IC t统计量": t_stat,
-                "IC>0占比": win_rate,
-                "|IC|>0.02占比": gt002_rate,
+                "IC Mean": mean,
+                "IC Std": std,
+                "IR": icir,
+                "IC t": t_stat,
+                "IC>0": win_rate,
+                "|IC|>0.02": gt002_rate,
             }
         )
 
@@ -362,20 +360,28 @@ def summarize_group_return(
     quantile: float = 0.2,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    封装分组收益与多空收益的计算（多因子 × 多持仓周期）。
+    ×
 
-    入参：
-        group: pd.DataFrame，包含因子与收益列
-        factor_list: List[str] 因子列名
-        ret_list: List[str] 收益列名
-        quantile: float 分组分位数
 
-    返回：
-        daily_df: pd.DataFrame，多层列 {factor}_{ret} 下含 long_short/long_avg
-        summary_df: pd.DataFrame，各列分组收益的汇总指标
+       group: pd.DataFrame
+       factor_list: List[str]
+       ret_list: List[str]
+       quantile: float
+
+
+       daily_df: pd.DataFrame {factor}_{ret}  long_short/long_avg
+       summary_df: pd.DataFrame
     """
 
     def _summary(series: pd.Series) -> pd.Series:
+        """计算收益率序列的统计摘要。
+
+        Args:
+            series: 收益率序列
+
+        Returns:
+            包含均值、标准差、累计收益、胜率等指标的Series
+        """
         s = series.dropna()
         if s.empty:
             return pd.Series(dtype=float)
@@ -418,14 +424,22 @@ def summarize_autocorr(
     lag: int = 1,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    计算预测得分的自相关序列及摘要（多因子）。
 
-    返回：
-        ac_df: pd.DataFrame，列为因子名，对应自相关序列
-        summary_df: pd.DataFrame，自相关汇总指标
+
+
+    ac_df: pd.DataFrame
+    summary_df: pd.DataFrame
     """
 
     def _summary(series: pd.Series) -> pd.Series:
+        """计算自相关序列的统计摘要。
+
+        Args:
+            series: 自相关序列
+
+        Returns:
+            包含均值、标准差、样本数的Series
+        """
         s = series.dropna()
         if s.empty:
             return pd.Series(dtype=float)
@@ -452,20 +466,36 @@ def summarize_turnover(
     lag: int = 1,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    基于 qlib 的 Top/Bottom turnover 逻辑（多因子）。
+    qlib  Top/Bottom turnover
 
-    返回：
-        daily_df: pd.DataFrame，多层列为因子名下的 top/bottom 换手率
-        summary_df: pd.DataFrame，按因子汇总换手率均值/波动
+
+       daily_df: pd.DataFrame top/bottom
+       summary_df: pd.DataFrame/
     """
 
     def _compute(score_col: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """计算换手率。
+
+        Args:
+            score_col: 得分列名
+
+        Returns:
+            (daily_df, summary_df) 日度换手率和汇总统计
+        """
         pred = group[[score_col]].copy()
         pred["score_last"] = pred.groupby(level="instrument", group_keys=False)[
             score_col
         ].shift(lag)
 
         def _top_turnover(x: pd.DataFrame) -> float:
+            """计算顶部N档的换手率。
+
+            Args:
+                x: 分组后的DataFrame
+
+            Returns:
+                换手率
+            """
             k = len(x) // N
             if k == 0:
                 return np.nan
@@ -474,6 +504,14 @@ def summarize_turnover(
             return 1 - top_now.isin(top_prev).sum() / k
 
         def _bottom_turnover(x: pd.DataFrame) -> float:
+            """计算底部N档的换手率。
+
+            Args:
+                x: 分组后的DataFrame
+
+            Returns:
+                换手率
+            """
             k = len(x) // N
             if k == 0:
                 return np.nan
@@ -488,6 +526,14 @@ def summarize_turnover(
         daily = pd.DataFrame({"top": top, "bottom": bottom})
 
         def _summary(series: pd.Series) -> pd.Series:
+            """计算换手率序列的统计摘要。
+
+            Args:
+                series: 换手率序列
+
+            Returns:
+                包含均值、标准差、样本数的Series
+            """
             s = series.dropna()
             if s.empty:
                 return pd.Series(dtype=float)
@@ -516,32 +562,32 @@ def save_performance_graphs(
     graph_names: Optional[List[str]] = None,
 ) -> None:
     """
-    生成性能图并保存为 html 文件（支持多因子×多周期）。
+     html ×
 
     Args:
-        merged_df: 合并后的数据，包含因子列和收益率列
-        factor_list: 因子列名列表
-        ret_list: 收益率列名列表
-        output_dir: 输出目录
-        graph_names: 要生成的图表类型列表，默认为 ["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
+        merged_df:
+        factor_list:
+        ret_list:
+        output_dir:
+        graph_names:  ["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
     """
     names = graph_names or ["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 为每个因子×收益率组合生成图表
+    # ×
     for factor_name in factor_list:
         for ret_col in ret_list:
-            # 构造单因子×单收益率的数据
-            # pred_label格式要求：包含因子列和收益率列的DataFrame
+            # ×
+            # pred_labelDataFrame
             pred_label = merged_df[[factor_name, ret_col]].copy()
-            pred_label.columns = ["score", "label"]  # qlib要求的列名
+            pred_label.columns = ["score", "label"]  # qlib
 
-            # 创建子目录：factor_ret/
+            # factor_ret/
             subdir = out_dir / f"{factor_name}_{ret_col}"
             subdir.mkdir(parents=True, exist_ok=True)
 
-            # 生成性能图表
+            #
             for name in names:
                 try:
                     figs = model_performance_graph(
@@ -554,10 +600,10 @@ def save_performance_graphs(
                         fig.write_html(str(subdir / filename))
                 except Exception as e:
                     print(
-                        f"[save_performance_graphs] {factor_name}-{ret_col} 生成{name}图表失败: {e}"
+                        f"[save_performance_graphs] {factor_name}-{ret_col} {name}: {e}"
                     )
 
-            # 生成score_ic图表
+            # score_ic
             try:
                 figs = score_ic_graph(pred_label, show_notebook=False)
                 for i, fig in enumerate(figs, start=1):
@@ -565,7 +611,7 @@ def save_performance_graphs(
                     fig.write_html(str(subdir / name))
             except Exception as e:
                 print(
-                    f"[save_performance_graphs] {factor_name}-{ret_col} 生成score_ic图表失败: {e}"
+                    f"[save_performance_graphs] {factor_name}-{ret_col} score_ic: {e}"
                 )
 
-    print(f"  ✓ 性能图表已保存到: {out_dir}")
+    print(f"   : {out_dir}")

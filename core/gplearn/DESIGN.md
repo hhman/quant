@@ -4,7 +4,7 @@
 
 ---
 
-## 📋 目录
+## 目录
 
 1. [系统设计原则](#系统设计原则)
 2. [核心架构决策](#核心架构决策)
@@ -26,30 +26,30 @@
 
 **实践**：
 ```python
-# ✅ 好的设计：纯函数
+# 好的设计：纯函数
 def rolling_sma(arr: np.ndarray, window: int) -> np.ndarray:
     return pd.Series(arr).rolling(window).mean().values
 
-# ❌ 避免：不必要的类封装
+# 避免：不必要的类封装
 class RollingOperator:
     def compute(self, arr, window):
         # ...
 ```
 
 **收益**：
-- ✅ 代码简洁直观
-- ✅ 易于测试（输入 → 输出）
-- ✅ 可组合性强
+- 代码简洁直观
+- 易于测试（输入 → 输出）
+- 可组合性强
 
 ---
 
 ### 2. 明确的使用边界 (Explicit Scope Boundaries)
 
 **系统定位**：
-- 🎯 **用户**：个人研究使用（单用户）
-- 🎯 **数据源**：仅支持 Qlib
-- 🎯 **执行模式**：支持多线程训练（`n_jobs=4` 默认）
-- 🎯 **环境**：本地脚本运行
+- **用户**：个人研究使用（单用户）
+- **数据源**：仅支持 Qlib
+- **执行模式**：支持多线程训练（`n_jobs=4` 默认）
+- **环境**：本地脚本运行
 
 **为何支持多线程？**
 
@@ -63,10 +63,10 @@ class RollingOperator:
 ### 3. 实用主义工程 (Pragmatic Engineering)
 
 **拒绝过度设计**：
-- ❌ 日志系统 → 使用 `print` + shell 重定向
-- ❌ 单元测试 → 手动验证 + Jupyter 交互
-- ❌ 数据库 → 文件系统（`.cache/` 目录）
-- ❌ Web API → CLI + Python 函数调用
+- 日志系统 → 使用 `print` + shell 重定向
+- 单元测试 → 手动验证 + Jupyter 交互
+- 数据库 → 文件系统（`.cache/` 目录）
+- Web API → CLI + Python 函数调用
 
 **核心原则**：在满足功能需求的前提下，保持系统最简化。
 
@@ -95,9 +95,9 @@ with global_state(index, boundaries):
 
 | 方案 | 优点 | 缺点 | 适用场景 |
 |------|------|------|---------|
-| **全局变量（当前）** | • 算子签名简洁<br>• 代码侵入小<br>• 支持多线程<br>• 无性能开销 | • 需手动管理生命周期 | ✅ 多线程训练 |
-| TLS | 线程隔离 | • ❌ 不支持多线程<br>• 测试困难 | ❌ |
-| 改写 Gplearn | 彻底解决 | • 升级困难<br>• 维护成本高 | ❌ |
+| **全局变量（当前）** | • 算子签名简洁<br>• 代码侵入小<br>• 支持多线程<br>• 无性能开销 | • 需手动管理生命周期 | 多线程训练 |
+| TLS | 线程隔离 | • 不支持多线程<br>• 测试困难 | |
+| 改写 Gplearn | 彻底解决 | • 升级困难<br>• 维护成本高 | |
 
 ---
 
@@ -121,8 +121,14 @@ instrument
 
 ### 展平算法
 
-**步骤 1**：按日期优先展平（Fortran order）
+**数据转换流程**：
 
+1. 面板数据按日期优先展平（Fortran order）
+2. 重塑为 2D 数组供 Gplearn 使用
+3. 保留原始 MultiIndex 用于可逆转换
+4. 计算边界索引记录每只股票的起始位置
+
+**代码示例**：
 ```python
 # 面板数据 → 1D 数组（按列展平）
 X = features_df.values.flatten(order="F")
@@ -141,11 +147,7 @@ X = [
 
 # 重塑为 2D 数组
 X = X.reshape(n_samples, n_features)
-```
 
-**步骤 2**：保留语义信息
-
-```python
 # 保留原始索引（可逆转换）
 index = features_df.index  # MultiIndex (instrument, datetime)
 
@@ -223,11 +225,11 @@ for b in boundary_indices[1:]:
 
 ### 工作流程示例
 
-假设 2 只股票各 5 天数据展平后：
+**场景**：2 只股票各 5 天数据展平后
 - `arr = [10.1, 10.2, ..., 10.5, 20.1, 20.2, ..., 20.5]`
 - `boundaries = [0, 5]`（第二只股票从 position 5 开始）
 
-执行 `sma_20(arr)` 时：
+**执行流程**：
 1. 计算 20 日移动平均
 2. 检测到边界 position 5
 3. 将 position 5-25 标记为 NaN（防止跨股票污染）
@@ -283,36 +285,14 @@ arr = [10.5, 20.3, 30.1,  # 2020-01-01 的 3 只股票
 
 ### 解决方案：面板转换装饰器
 
-**实现**：`core/gplearn/common/decorators.py:104-132`
+**实现位置**：`core/gplearn/common/decorators.py:104-132`
 
-```python
-def with_panel_builder(func: Callable) -> Callable:
-    """为截面算子添加面板数据转换"""
-
-    @wraps(func)
-    def wrapper(arr: np.ndarray, *args, **kwargs) -> np.ndarray:
-        # 1. 从 TLS 获取 MultiIndex
-        index = get_index()
-
-        # 2. 1D 数组 → DataFrame（保留 MultiIndex）
-        df = pd.DataFrame({"value": arr}, index=index)
-
-        # 3. DataFrame → 面板数据（unstack）
-        #       instrument
-        #       000001 000002 000003
-        # date
-        # 2020-01-01  10.5   20.3   30.1
-        # 2020-01-02  10.6   20.1   30.2
-        panel = df["value"].unstack(level=0)
-
-        # 4. 调用截面算子（操作面板数据）
-        result_panel = func(panel, *args, **kwargs)
-
-        # 5. 面板数据 → 1D 数组（stack）
-        return result_panel.stack().values
-
-    return wrapper
-```
+装饰器自动完成以下转换流程：
+1. 从全局状态获取 MultiIndex
+2. 将 1D 数组转换为 DataFrame（保留 MultiIndex）
+3. 使用 `unstack(level=0)` 将 DataFrame 转换为面板数据（日期为行，股票为列）
+4. 调用截面算子函数处理面板数据
+5. 使用 `stack()` 将面板数据展平为 1D 数组返回
 
 ### 使用示例
 
@@ -322,19 +302,13 @@ def with_panel_builder(func: Callable) -> Callable:
 def cross_sectional_rank(panel: pd.DataFrame) -> pd.DataFrame:
     """横截面排名"""
     return panel.rank(axis=1, pct=True).fillna(0.5)
-
-# 执行流程：
-# 1. Gplearn 调用 rank([10.5, 20.3, 30.1, 10.6, 20.1, 30.2])
-# 2. with_panel_builder 转换为面板：
-#    000001 000002 000003
-#    10.5   20.3   30.1    ← 2020-01-01
-#    10.6   20.1   30.2    ← 2020-01-02
-# 3. cross_sectional_rank 计算每天排名：
-#    000001 000002 000003
-#    0.0    0.5    1.0     ← 2020-01-01
-#    0.0    0.5    1.0     ← 2020-01-02
-# 4. stack() → [0.0, 0.5, 1.0, 0.0, 0.5, 1.0]
 ```
+
+**执行流程**：
+- Gplearn 调用 `rank([10.5, 20.3, 30.1, 10.6, 20.1, 30.2])`
+- `with_panel_builder` 转换为面板数据（日期为行，股票为列）
+- `cross_sectional_rank` 计算每天的横截面排名
+- `stack()` 将结果展平为 1D 数组返回
 
 ### unstack 机制详解
 
@@ -386,95 +360,36 @@ def rank_ic(y_true, y_pred):
 
 ### 解决方案：双面板转换装饰器
 
-**实现**：`core/gplearn/common/decorators.py:58-101`
+**实现位置**：`core/gplearn/common/decorators.py:58-101`
 
-```python
-def with_panel_convert(min_samples: int = 100, clean_axis: int = 1):
-    """为适应度函数添加面板数据转换"""
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(
-            y_true: np.ndarray,
-            y_pred: np.ndarray,
-            index: pd.MultiIndex = None,
-            **kwargs,
-        ):
-            # 1. 获取 MultiIndex
-            if index is None:
-                index = get_index()
-
-            # 2. 同时构建 y_true 和 y_pred 的面板
-            y_true_panel, y_pred_panel = build_dual_panel(y_true, y_pred, index)
-
-            # 3. 清洗面板数据（删除全 NaN 列）
-            y_true_panel = clean_panel(y_true_panel, axis=clean_axis, min_samples=min_samples)
-            y_pred_panel = clean_panel(y_pred_panel, axis=clean_axis, min_samples=min_samples)
-
-            # 4. 调用适应度函数
-            return func(y_true_panel, y_pred_panel, **kwargs)
-
-        return wrapper
-
-    return decorator
-```
+装饰器处理流程：
+1. 获取 MultiIndex（从参数或全局状态）
+2. 调用 `build_dual_panel()` 同时构建 y_true 和 y_pred 的面板数据
+3. 清洗面板数据（删除全 NaN 列）
+4. 调用适应度函数处理双面板数据
 
 ### build_dual_panel 实现
 
-**位置**：`core/gplearn/common/panel.py:76-95`
+**实现位置**：`core/gplearn/common/panel.py:76-95`
 
-```python
-def build_dual_panel(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
-    index: pd.MultiIndex
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    同时构建 y_true 和 y_pred 的面板数据
-
-    Args:
-        y_true: 真实值（扁平）
-        y_pred: 预测值（扁平）
-        index: MultiIndex
-
-    Returns:
-        (y_true_panel, y_pred_panel)
-    """
-    # 合并为 DataFrame（共享 MultiIndex）
-    df = pd.DataFrame({
-        "y_true": y_true,
-        "y_pred": y_pred
-    }, index=index)
-
-    # 同时 unstack
-    y_true_panel = df["y_true"].unstack(level=0)
-    y_pred_panel = df["y_pred"].unstack(level=0)
-
-    return y_true_panel, y_pred_panel
-```
+函数功能：
+- 将 y_true 和 y_pred 合并为单个 DataFrame（共享 MultiIndex）
+- 同时对两个序列执行 `unstack(level=0)` 操作
+- 返回两个面板数据（形状为 `(n_dates, n_instruments)`）
 
 ### 使用示例：Rank IC 适应度函数
 
+**函数签名**：
 ```python
 @register_fitness(name="rank_ic")
 @with_panel_convert(min_samples=100)
 def rank_ic_fitness(y_true_panel: pd.DataFrame, y_pred_panel: pd.DataFrame):
-    """
-    Rank IC 适应度函数
-
-    Args:
-        y_true_panel: 真实收益面板 (n_dates, n_instruments)
-        y_pred_panel: 预测因子面板 (n_dates, n_instruments)
-
-    Returns:
-        平均 Rank IC
-    """
-    # 计算每天的横截面相关性
-    ic_series = y_pred_panel.corrwith(y_true_panel, axis=1)
-
-    # 返回均值
-    return ic_series.mean()
+    ...
 ```
+
+**功能说明**：
+- 计算每天的横截面相关性（Spearman 相关系数）
+- 返回平均 Rank IC 作为适应度值
 
 **数据流**：
 ```python
@@ -507,18 +422,12 @@ _boundaries_global: Optional[List[int]] = None
 
 ### API 设计
 
-```python
-# 设置状态
-set_index(multi_index)              # 保存 MultiIndex
-set_boundary_indices([0, 750, ...]) # 保存边界索引
-
-# 获取状态（算子内部）
-index = get_index()                 # 获取 MultiIndex
-boundaries = get_boundary_indices() # 获取边界索引
-
-# 清理状态
-clear_globals()                     # 删除所有全局数据
-```
+提供以下接口函数：
+- `set_index(multi_index)`: 保存 MultiIndex
+- `set_boundary_indices([0, 750, ...])`: 保存边界索引
+- `get_index()`: 获取 MultiIndex
+- `get_boundary_indices()`: 获取边界索引
+- `clear_globals()`: 清理所有全局数据
 
 ### 生命周期管理
 
@@ -545,79 +454,30 @@ def _train(X, y, index, boundaries):
 
 ### 注册表实现
 
-**位置**：`core/gplearn/common/registry.py`
+**实现位置**：`core/gplearn/common/registry.py`
 
-```python
-def create_registry(name: str) -> dict:
-    """创建注册表"""
-    return {}
-
-def register(registry: dict, name: str, **meta):
-    """通用注册装饰器"""
-    def decorator(func):
-        # 自动推断 arity（如果未提供）
-        if "arity" not in meta:
-            sig = inspect.signature(func)
-            arity = len([
-                p for p in sig.parameters.values()
-                if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
-            ])
-            meta["arity"] = arity
-        registry[name] = {"function": func, "name": name, **meta}
-        return func
-    return decorator
-
-def get(registry: dict, name: str, registry_name: str) -> Callable:
-    """从注册表获取函数"""
-    if name not in registry:
-        raise KeyError(f"{registry_name}: 未注册的名称 '{name}'")
-    return registry[name]["function"]
-```
+核心函数：
+- `create_registry(name)`: 创建空注册表
+- `register(registry, name, **meta)`: 通用注册装饰器，自动推断函数 arity
+- `get(registry, name, registry_name)`: 从注册表获取函数
 
 ### 算子注册表管理
 
-**位置**：`core/gplearn/common/registry.py`
+**实现位置**：`core/gplearn/common/registry.py`
 
-```python
-# 模块级单例
-_OPERATOR_REGISTRY = None
-
-def _get_operator_registry() -> dict:
-    """获取算子注册表（模块级单例）"""
-    global _OPERATOR_REGISTRY
-    if _OPERATOR_REGISTRY is None:
-        _OPERATOR_REGISTRY = create_registry("Operator")
-    return _OPERATOR_REGISTRY
-
-# 算子注册装饰器
-def register_operator(name: str, category: str = "time_series", **meta) -> Callable:
-    """算子注册装饰器"""
-    registry = _get_operator_registry()
-    return register(registry, name, category=category, **meta)
-
-# 获取算子
-def get_operator(name: str) -> Callable:
-    """获取算子函数"""
-    registry = _get_operator_registry()
-    return get(registry, name, "Operator")
-```
+核心组件：
+- 模块级单例 `_OPERATOR_REGISTRY`
+- `_get_operator_registry()`: 延迟初始化注册表
+- `register_operator(name, category, **meta)`: 算子注册装饰器
+- `get_operator(name)`: 获取算子函数
 
 ### 算子定义与注册
 
-**位置**：`core/gplearn/operators.py`
+**实现位置**：`core/gplearn/operators.py`
 
-```python
-# arity=1 算子（预定义窗口）
-@register_operator(name="sma_20", category="time_series", arity=1)
-@with_boundary_check(window_size=20)
-def sma_20(arr):
-    return pd.Series(arr).rolling(20).mean().values
-
-# arity=2 算子（数组运算）
-@register_operator(name="add", category="basic", arity=2)
-def op_add(arr1, arr2):
-    return arr1 + arr2
-```
+算子定义模式：
+- arity=1 算子：使用预定义窗口（如 `sma_20`、`ema_10`）
+- arity=2 算子：支持双数组运算（如 `add`、`sub`、`corr_10`）
 
 ### 时序算子的 arity 选择
 
@@ -638,24 +498,13 @@ def op_add(arr1, arr2):
 
 ### 获取所有算子
 
-**位置**：`core/gplearn/common/registry.py`
+**实现位置**：`core/gplearn/common/registry.py`
 
-```python
-def get_all_operators() -> List[Callable]:
-    """获取所有 Gplearn 兼容的算子"""
-    operator_names = list_operators()
-
-    operators = []
-    for op_name in operator_names:
-        func = get_operator(op_name)
-        meta = _get_operator_meta(op_name)
-        arity = meta["arity"]
-
-        gplearn_func = adapt_operator_to_gplearn(func, arity, op_name)
-        operators.append(gplearn_func)
-
-    return operators
-```
+函数功能：
+- 遍历所有已注册算子
+- 获取算子函数和元数据（arity、category 等）
+- 将算子适配为 Gplearn 兼容的函数对象
+- 返回算子列表供遗传算法使用
 
 ---
 
@@ -690,10 +539,10 @@ class GPConfig:
 ```
 
 **为何使用 dataclass**：
-- ✅ 类型安全（IDE 自动补全）
-- ✅ 不可变性（`frozen=True` 防止意外修改）
-- ✅ 可文档化（docstring）
-- ✅ 无需外部配置文件（YAML/TOML）
+- 类型安全（IDE 自动补全）
+- 不可变性（`frozen=True` 防止意外修改）
+- 可文档化（docstring）
+- 无需外部配置文件（YAML/TOML）
 
 ---
 
@@ -714,45 +563,23 @@ class GPConfig:
 
 ### 新增时序算子（arity=1）
 
-```python
-@register_operator(name="rsi_14", category="time_series", arity=1)
-@with_boundary_check(window_size=14)
-def rsi_14(arr):
-    return talib.RSI(arr, timeperiod=14)
-```
+使用 `@register_operator` 和 `@with_boundary_check` 装饰器定义算子，函数接收单个数组参数。
 
 ### 批量创建时序算子
 
-```python
-for w in [5, 10, 20, 60]:
-    _create_talib_operator(f"rsi_{w}", talib.RSI, w, "momentum")
-```
+通过循环遍历常用窗口参数（5, 10, 20, 60），自动生成多个窗口版本的算子。
 
 ### 新增截面算子
 
-```python
-@register_operator(name="rank", category="cross_sectional", arity=1)
-@with_panel_builder
-def cross_sectional_rank(panel):
-    return panel.rank(axis=1, pct=True).fillna(0.5)
-```
+使用 `@with_panel_builder` 装饰器，函数接收面板数据（DataFrame），返回面板数据。
 
 ### 新增算术运算算子（arity=2）
 
-```python
-@register_operator(name="add", category="basic", arity=2)
-def op_add(arr1, arr2):
-    return arr1 + arr2
-```
+使用 `@register_operator` 装饰器指定 `arity=2`，函数接收两个数组参数。
 
 ### 新增双数组时序算子（arity=2）
 
-```python
-@register_operator(name="corr_10", category="time_series", arity=2)
-@with_boundary_check(window_size=10)
-def corr_10(arr1, arr2):
-    return pd.Series(arr1).rolling(10).corr(pd.Series(arr2)).values
-```
+结合 `@with_boundary_check` 和 `arity=2`，实现如滚动相关系数等算子。
 
 ---
 
@@ -760,33 +587,25 @@ def corr_10(arr1, arr2):
 
 ### 修改配置
 
-编辑 `core/gplearn/config.py`，修改 dataclass 默认值
+编辑 `core/gplearn/config.py`，修改 dataclass 默认值。
 
 ### 调整数据清洗策略
 
-编辑 `core/gplearn/data.py` 中的 `clean_features()` 函数
+编辑 `core/gplearn/data.py` 中的 `clean_features()` 函数。
 
 ### 调试算子
 
-```python
-# 临时测试
-from core.gplearn.operators import get_operator
-import numpy as np
-
-sma_20 = get_operator("sma_20")
-arr = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-result = sma_20(arr)
-print(result)  # [0.0, 0.0, ..., 3.0]（前 20 个被边界检测设为 NaN，再被 nan_to_num 设为 0）
-```
+使用 `get_operator()` 获取算子函数进行测试。
 
 ---
 
 ## 设计哲学总结
 
-1. **函数式优先**：简洁、可测试、可组合
-2. **明确边界**：个人研究 + Qlib + 多线程训练 + 本地
-3. **实用主义**：全局状态、预定义窗口、print 调试
-4. **装饰器驱动**：零学习成本的扩展机制
-5. **拒绝过度工程**：不添加不需要的抽象层
+核心设计原则：
+1. 函数式优先：简洁、可测试、可组合
+2. 明确边界：个人研究 + Qlib + 多线程训练 + 本地
+3. 实用主义：全局状态、预定义窗口、print 调试
+4. 装饰器驱动：零学习成本的扩展机制
+5. 拒绝过度工程：不添加不需要的抽象层
 
 **核心原则**：在满足功能需求的前提下，保持系统最简化。

@@ -1,16 +1,11 @@
-"""
-配置管理模块
-
-使用 dataclass 管理系统配置参数，提供类型安全和不可变性保证。
-"""
+"""GP配置模块，定义数据配置和GP算法配置的数据类。"""
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
 
-# ==================== 默认配置常量 ====================
+# ==================== 默认配置 ====================
 
-# 默认特征字段
 DEFAULT_FEATURES = [
     "$close",
     "$open",
@@ -21,7 +16,6 @@ DEFAULT_FEATURES = [
     "$vwap",
 ]
 
-# 默认目标标签
 DEFAULT_TARGET = "Ref($close, -1)/$close - 1"
 
 
@@ -30,56 +24,54 @@ DEFAULT_TARGET = "Ref($close, -1)/$close - 1"
 
 @dataclass(frozen=True)
 class DataConfig:
-    """
-    数据加载与清洗配置
+    """数据配置类。
 
     Attributes:
         features: 特征字段列表
-        target: 目标标签表达式
-        fillna_price: 价格类特征填充策略 ("ffill", "zero", "mean", "drop")
-        fillna_volume: 成交量类特征填充策略 ("ffill", "zero", "mean", "drop")
-        price_columns: 价格类字段列表（用于识别）
-        volume_columns: 成交量类字段列表（用于识别）
+        target: 目标字段表达式
+        fillna_price: 价格字段填充方式（ffill/zero/mean/drop）
+        fillna_volume: 成交量字段填充方式（ffill/zero/mean/drop）
+        price_columns: 价格字段列名列表
+        volume_columns: 成交量字段列名列表
     """
 
     features: List[str] = field(default_factory=lambda: DEFAULT_FEATURES)
     target: str = DEFAULT_TARGET
-    fillna_price: str = "ffill"  # 价格类：前向填充
-    fillna_volume: str = "zero"  # 成交量类：填充 0
+    fillna_price: str = "ffill"
+    fillna_volume: str = "zero"
 
-    # 特征类型分类（用于识别）
     price_columns: List[str] = field(
         default_factory=lambda: ["$close", "$open", "$high", "$low", "$vwap"]
     )
     volume_columns: List[str] = field(default_factory=lambda: ["$volume", "$amount"])
 
 
-# ==================== 遗传算法配置 ====================
+# ==================== GP算法配置 ====================
 
 
 @dataclass(frozen=True)
 class GPConfig:
-    """
-    Gplearn 遗传算法参数配置
+    """GP遗传算法配置类。
 
     Attributes:
         population_size: 种群大小
         generations: 迭代代数
-        hall_of_fame: 精英保留数量
-        n_components: 最终输出的因子数量
-        tournament_size: 锦标赛选择大小
+        hall_of_fame: 保留的精英个体数量
+        n_components: 最终输出的组件数量
+        tournament_size: 锦标赛选择规模
         p_crossover: 交叉概率
         p_subtree_mutation: 子树变异概率
-        p_hoist_mutation: 提升（hoist）变异概率
+        p_hoist_mutation: 提升变异概率
         p_point_mutation: 点变异概率
         p_point_replace: 点替换概率
-        const_range: 常数范围
-        init_depth: 初始树深度范围 (min, max)
-        init_method: 初始化方法 ("half and half", "grow", "full")
+        const_range: 常量范围
+        init_depth: 初始树深度范围(min, max)
+        init_method: 初始化方法（half and half/grow/full）
         max_samples: 最大采样比例
-        n_jobs: 并行任务数（支持多线程）
-        verbose: 输出详细程度
+        n_jobs: 并行任务数
+        verbose: 详细输出级别
         random_state: 随机种子
+        stopping_criteria: 停止标准（适应度阈值）
     """
 
     population_size: int = 20
@@ -102,11 +94,10 @@ class GPConfig:
     stopping_criteria: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        转换为字典（用于传递给 SymbolicTransformer）
+        """转换为字典格式，用于传递给SymbolicTransformer。
 
         Returns:
-            参数字典
+            配置字典
         """
         return {
             "population_size": self.population_size,
@@ -130,24 +121,32 @@ class GPConfig:
         }
 
 
-# ==================== 预设配置 ====================
+# ==================== 配置工厂函数 ====================
 
 
 def get_default_data_config() -> DataConfig:
-    """获取默认数据配置"""
+    """获取默认数据配置。
+
+    Returns:
+        默认数据配置对象
+    """
     return DataConfig()
 
 
 def get_default_gp_config() -> GPConfig:
-    """获取默认 GP 配置"""
+    """获取默认GP配置。
+
+    Returns:
+        默认GP配置对象
+    """
     return GPConfig()
 
 
 def get_fast_test_config() -> GPConfig:
-    """
-    获取快速测试配置（用于开发和调试）
+    """获取快速测试配置（用于调试和测试）。
 
-    减小种群大小和迭代次数，加快训练速度
+    Returns:
+        快速测试配置对象
     """
     return GPConfig(
         population_size=20,
@@ -158,10 +157,10 @@ def get_fast_test_config() -> GPConfig:
     )
 
 
-# ==================== 导出 ====================
+# ==================== 导出列表 ====================
 
 __all__ = [
-    # 配置类
+    # 数据类
     "DataConfig",
     "GPConfig",
     # 默认值

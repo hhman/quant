@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Step2: 行业市值中性化
-功能：对因子数据进行行业和市值中性化处理
-支持智能cache子集匹配
-完全脱离qlib依赖
+Step2:
+
+cache
+qlib
 """
 
 import sys
@@ -26,70 +26,70 @@ def neutralize_factors(
     provider_uri: str,
 ) -> None:
     """
-    因子中性化的核心逻辑函数
+
 
     Parameters:
     -----------
     market : str
-        市场标识
+
     start_date : str
-        起始日期 (YYYY-MM-DD)
+         (YYYY-MM-DD)
     end_date : str
-        结束日期 (YYYY-MM-DD)
+         (YYYY-MM-DD)
     factor_formulas : list[str]
-        因子表达式列表
+
     provider_uri : str
-        Qlib数据路径
+        Qlib
 
     Returns:
     --------
     None
     """
-    # 创建 cache manager
+    #  cache manager
     cache_mgr = CacheManager(market, start_date, end_date)
 
-    print("\n🎯 Step2: 行业市值中性化")
+    print("\n Step2: ")
 
-    # 加载 step1 的 cache
-    print("📥 加载数据...")
+    #  step1  cache
+    print(" ...")
     try:
         factor_std = cache_mgr.read_dataframe("factor_std")
         styles_df = cache_mgr.read_dataframe("styles")
     except FileNotFoundError as e:
-        print(f"❌ 错误: {e}")
+        print(f" : {e}")
         sys.exit(1)
 
-    print(f"  ✓ 标准化因子: {factor_std.shape}")
-    print(f"  ✓ 风格数据: {styles_df.shape}")
+    print(f"   : {factor_std.shape}")
+    print(f"   : {styles_df.shape}")
 
-    # 提取因子列 - 使用显式传入的factor_formulas参数
+    #  - factor_formulas
     factor_cols = [col for col in factor_std.columns if col in factor_formulas]
 
-    # 如果没有匹配的因子，说明参数错误
+    #
     if not factor_cols:
-        print(f"❌ 错误: 请求的因子 {factor_formulas} 在cache中不存在")
+        print(f" :  {factor_formulas} cache")
         print(
-            f"  cache中的因子列: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}"
+            f"  cache: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}"
         )
         sys.exit(1)
 
-    # 检查必需的风格列
+    #
     required_style_cols = ["$total_mv", "$industry", "$float_mv"]
     missing_cols = [col for col in required_style_cols if col not in styles_df.columns]
     if missing_cols:
-        print(f"❌ 错误: 缺少列: {missing_cols}")
+        print(f" : : {missing_cols}")
         sys.exit(1)
 
-    # 合并因子和风格数据
+    #
     data_for_neutralize = pd.concat(
         [factor_std[factor_cols], styles_df[required_style_cols]], axis=1
     )
 
-    print(f"  ✓ 因子列: {len(factor_cols)}个 {factor_cols}")
-    print(f"  ✓ 风格列: {required_style_cols}")
+    print(f"   : {len(factor_cols)} {factor_cols}")
+    print(f"   : {required_style_cols}")
 
-    # 执行中性化
-    print("⚙️  执行行业市值中性化...")
+    #
+    print("  ...")
     result_list = []
     for dt in data_for_neutralize.index.get_level_values("datetime").unique():
         daily_group = (
@@ -112,28 +112,28 @@ def neutralize_factors(
             level=["instrument", "datetime"]
         )
         cache_mgr.write_dataframe(result, "neutralized")
-        print(f"  ✓ 保存: neutralized ({result.shape})")
+        print(f"   : neutralized ({result.shape})")
 
-        # 中性化效果摘要
-        print("\n📊 中性化效果摘要:")
+        #
+        print("\n :")
         merged = result.join(styles_df[["$total_mv"]])
         for factor_col in result.columns:
             corr = merged[factor_col].corr(np.log(merged["$total_mv"]))
-            print(f"  {factor_col} 与log(市值)相关性: {corr:.4f}")
+            print(f"  {factor_col} log(): {corr:.4f}")
 
-        print("\n📈 中性化因子分布统计:")
+        print("\n :")
         neutralized_stats = pd.DataFrame(
             {
-                "均值": result.mean(),
-                "标准差": result.std(),
-                "最小值": result.min(),
-                "最大值": result.max(),
-                "缺失率": result.isna().mean(),
+                "mean": result.mean(),
+                "std": result.std(),
+                "min": result.min(),
+                "max": result.max(),
+                "na_ratio": result.isna().mean(),
             }
         )
         print(neutralized_stats.head(10))
 
-        print("\n✅ Step2完成!")
+        print("\n Step2!")
     else:
-        print("❌ 错误: 中性化失败，结果为空")
+        print(" : ")
         sys.exit(1)

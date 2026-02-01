@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Step 4 CLI: 因子绩效评估
-独立的 CLI 入口脚本
-"""
+"""Step 4 CLI: 因子绩效评估模块的命令行接口。"""
 
 import sys
 import argparse
@@ -19,8 +16,7 @@ from utils.cli_args import (
 
 
 def parse_args() -> argparse.Namespace:
-    """
-    定义并解析 CLI 参数
+    """解析命令行参数。
 
     Returns:
         解析后的参数命名空间
@@ -35,13 +31,12 @@ def parse_args() -> argparse.Namespace:
         """,
     )
 
-    # 核心参数
     parser.add_argument(
-        "--market", type=str, default="csi300", help="市场标识 (default: csi300)"
+        "--market", type=str, default="csi300", help="市场名称 (default: csi300)"
     )
 
     parser.add_argument(
-        "--start-date", type=str, required=True, help="起始日期 (YYYY-MM-DD)"
+        "--start-date", type=str, required=True, help="开始日期 (YYYY-MM-DD)"
     )
 
     parser.add_argument(
@@ -52,35 +47,30 @@ def parse_args() -> argparse.Namespace:
         "--factor-formulas",
         type=str,
         required=True,
-        help='因子表达式列表，分号分隔，如: "Ref($close,60)/$close;MA($close,20)"',
+        help='因子公式列表: "Ref($close,60)/$close;MA($close,20)"',
     )
 
     return parser.parse_args()
 
 
 def normalize_args(args: argparse.Namespace) -> dict:
-    """
-    校验和标准化参数
+    """规范化并验证命令行参数。
 
     Args:
-        args: 解析后的 CLI 参数
+        args: 解析后的CLI参数命名空间
 
     Returns:
-        标准化的参数字典
+        规范化后的参数字典
 
     Raises:
-        ValueError: 当参数验证失败时
+        ValueError: 参数验证失败
     """
-    # 验证并标准化市场参数
     market = validate_market(args.market)
 
-    # 验证日期范围
     start_date, end_date = parse_date_range(args.start_date, args.end_date)
 
-    # 解析因子表达式
     factor_formulas = parse_factor_formulas(args.factor_formulas)
 
-    # 获取默认 provider_uri
     provider_uri = resolve_provider_uri()
 
     return {
@@ -93,22 +83,17 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 
 def main():
-    """
-    主入口函数
-    """
-    # 1. 解析 CLI 参数
+    """Step 4主函数：执行因子绩效评估流程。"""
     args = parse_args()
 
-    # 2. 标准化参数
     params = normalize_args(args)
 
-    # 3. 调用核心逻辑函数
-    from step4.因子绩效评估 import evaluate_performance
+    from step4.evaluation import evaluate_performance
 
     evaluate_performance(**params)
 
-    print("\n✅ Step 4 完成!")
-    print("   结果已保存到: .cache/")
+    print("\n[完成] Step 4 执行完成!")
+    print("   缓存位置: .cache/")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Cache 管理器 - Parquet 版（智能模式）
-文件名即元数据，无独立 metadata 文件
-智能判断：自动追加新列、替换已存在列、创建新文件
-
-特殊功能：
-- 收益率数据自动保存为all市场，支持跨市场复用
-- 读取时自动检测并复用all市场收益率文件
-"""
+"""Parquet缓存管理器，支持数据缓存、合并、读取和元数据管理。"""
 
 from pathlib import Path
 from typing import Optional
@@ -15,15 +7,13 @@ import pandas as pd
 
 
 class CacheManager:
-    """
-    Parquet Cache 管理器
+    """Parquet缓存管理器。
 
-    特性：
-    - 文件名编码 market, start_date, end_date, type
-    - 智能模式：自动判断追加/替换/创建
-    - 支持高效的部分列读取
-    - 无独立 metadata 文件
-    - ✨ 收益率数据跨市场复用（自动保存为all市场）
+    功能：
+    - 根据market、start_date、end_date、type管理缓存文件
+    - 支持智能合并（新增列、替换列）
+    - 元数据管理和查询
+    - 缓存文件清理
     """
 
     CACHE_DIR = Path(".cache")
@@ -33,63 +23,54 @@ class CacheManager:
         market: str,
         start_date: str,  # YYYY-MM-DD
         end_date: str,  # YYYY-MM-DD
-    ):
-        """
-        初始化 Cache Manager
+    ) -> None:
+        """初始化缓存管理器。
 
         Args:
-            market: 市场标识
-            start_date: 起始日期 (YYYY-MM-DD)
+            market: 市场名称
+            start_date: 开始日期 (YYYY-MM-DD)
             end_date: 结束日期 (YYYY-MM-DD)
         """
         self.market = market
         self.start_date = start_date
         self.end_date = end_date
 
-        # 标准化日期格式 (YYYYMMDD)
         self.start_date_compact = start_date.replace("-", "")
         self.end_date_compact = end_date.replace("-", "")
 
-        # 创建 cache 目录
         self.CACHE_DIR.mkdir(exist_ok=True)
 
-    # ========================================================================
-    # 文件路径管理
-    # ========================================================================
-
     def get_parquet_path(self, data_type: str) -> Path:
-        """
-        生成 Parquet 文件路径
+        """获取Parquet文件路径。
 
         Args:
-            data_type: 数据类型标识
+            data_type: 数据类型
 
         Returns:
-            Parquet 文件完整路径
+            Parquet文件路径
         """
         filename = f"{self.market}_{self.start_date_compact}_{self.end_date_compact}__{data_type}.parquet"
         return self.CACHE_DIR / filename
 
     @staticmethod
     def parse_filename(filename: str) -> dict:
-        """
-        解析文件名，提取参数信息
+        """解析缓存文件名，提取元信息。
 
         Args:
             filename: 文件名
 
         Returns:
-            参数字典 {'market': str, 'start_date': str, 'end_date': str, 'type': str}
+            包含market、start_date、end_date、type的字典
         """
         name = filename.replace(".parquet", "")
         parts = name.split("__")
 
         if len(parts) != 2:
-            raise ValueError(f"无效的文件名格式: {filename}")
+            raise ValueError(f"文件名格式错误: {filename}")
 
         info_part = parts[0].split("_")
         if len(info_part) < 3:
-            raise ValueError(f"无效的文件名格式: {filename}")
+            raise ValueError(f"文件名格式错误: {filename}")
 
         market = info_part[0]
         start_compact = info_part[1]
@@ -105,10 +86,6 @@ class CacheManager:
             "type": parts[1],
         }
 
-    # ========================================================================
-    # 数据写入（智能模式）
-    # ========================================================================
-
     def write_dataframe(
         self,
         df: pd.DataFrame,
@@ -116,76 +93,50 @@ class CacheManager:
         compression: str = "snappy",
         verbose: bool = True,
     ) -> None:
-        """
-        写入 DataFrame 到 Parquet（智能模式）
+        """将DataFrame写入Parquet缓存文件。
 
-        自动行为（基于严格的表达式字符串匹配）：
-        - 收益率数据（returns）：
-          - 自动保存为all市场，支持跨市场复用
-          - 检查数据是否相同，相同则跳过写入
-          - 原因：收益率是确定性计算，相同输入必定产生相同输出
-        - 风格数据（styles）：
-          - 自动保存为all市场，支持跨市场复用
-          - 检查数据是否相同，相同则跳过写入
-          - 原因：风格数据对于所有市场相同，避免重复计算
-        - 其他数据（factor_raw, factor_std, neutralized等）：
-          - 文件不存在 -> 创建新文件
-          - 文件存在 -> 智能合并：
-            * 相同表达式 → 替换（重新计算）
-            * 不同表达式 → 追加（新因子）
-            * 未请求的已存在因子 → 保留（不删除）
+        处理逻辑：
+        - returns和styles类型统一写入all市场
+        - 如果文件已存在，智能合并（新增列、替换列、保留列）
+        - factor_raw、factor_std、neutralized类型会检查是否需要合并
 
         Args:
-            df: 要写入的数据
-            data_type: 数据类型标识
-            compression: 压缩方式 ('snappy', 'gzip', 'brotli', 'lz4')
-            verbose: 是否打印操作信息
+            df: 要写入的DataFrame
+            data_type: 数据类型
+            compression: 压缩算法（snappy/gzip/brotli/lz4）
+            verbose: 是否输出详细信息
         """
-        # 特殊数据处理：returns 和 styles 统一保存为all市场
         if data_type in ["returns", "styles"]:
             all_cache_mgr = CacheManager("all", self.start_date, self.end_date)
             path = all_cache_mgr.get_parquet_path(data_type)
             if verbose:
-                data_name = "收益率" if data_type == "returns" else "风格数据"
-                print(f"    💾 {data_name}保存为all市场: {path.name}")
-                print("    ⚡ 其他市场可复用此文件")
+                data_name = "收益率" if data_type == "returns" else "风格因子"
+                print(f"[合并] 将{data_name}写入all市场: {path.name}")
+                print("[合并] all市场逻辑：统一合并，不替换")
         else:
             path = self.get_parquet_path(data_type)
 
         if path.exists():
-            # returns 和 styles：文件存在即复用（跨市场共享，确定性计算）
             if data_type in ["returns", "styles"]:
                 if verbose:
-                    data_name = "收益率" if data_type == "returns" else "风格数据"
-                    print(f"    ✅ {data_name}文件已存在，复用已有文件")
-                return  # 直接跳过写入
+                    data_name = "收益率" if data_type == "returns" else "风格因子"
+                    print(f"[跳过] {data_name}已存在，跳过写入")
+                return
 
-            # 其他数据：智能合并
             if verbose:
-                print("    📄 检测到已有文件，执行智能合并...")
+                print("[合并] 缓存文件已存在，开始智能合并...")
 
-            # 读取现有数据
             existing_df = pd.read_parquet(path)
-
-            # 智能合并
             result_df, merge_info = self._smart_merge(existing_df, df, verbose)
-
-            # 写入合并后的数据
             result_df.to_parquet(path, compression=compression, index=True)
 
             if verbose:
                 self._log_merge_result(merge_info)
         else:
-            # 文件不存在：直接创建
             if verbose:
-                print("    💾 创建新文件")
+                print("[写入] 缓存文件不存在，创建新文件")
 
-            # 写入
             df.to_parquet(path, compression=compression, index=True)
-
-    # ========================================================================
-    # 智能合并辅助方法
-    # ========================================================================
 
     def _smart_merge(
         self,
@@ -193,19 +144,17 @@ class CacheManager:
         new_df: pd.DataFrame,
         verbose: bool = True,
     ) -> tuple[pd.DataFrame, dict]:
-        """
-        智能合并两个 DataFrame（基于严格的表达式字符串匹配）
+        """智能合并两个DataFrame。
 
-        核心原则：
-        - 因子身份 = 完整的表达式字符串
-        - 相同表达式 → 替换（重新计算）
-        - 不同表达式 → 追加（新因子）
-        - 未请求的已存在因子 → 保留（不删除）
+        合并规则：
+        - 相同列名 = 替换为新列
+        - 新列 = 追加到结果
+        - 只在旧数据的列 = 保留
 
         Args:
-            existing_df: 现有的数据
-            new_df: 新的数据
-            verbose: 是否打印详细信息
+            existing_df: 已存在的DataFrame
+            new_df: 新的DataFrame
+            verbose: 是否输出详细信息
 
         Returns:
             (合并后的DataFrame, 合并信息字典)
@@ -213,12 +162,10 @@ class CacheManager:
         existing_cols = set(existing_df.columns)
         new_cols = set(new_df.columns)
 
-        # 分类（基于字符串精确匹配）
-        to_replace = existing_cols & new_cols  # 交集：相同表达式 → 替换
-        to_append = new_cols - existing_cols  # 差集：不同表达式 → 追加
-        to_keep = existing_cols - new_cols  # 差集：未请求 → 保留
+        to_replace = existing_cols & new_cols
+        to_append = new_cols - existing_cols
+        to_keep = existing_cols - new_cols
 
-        # 合并
         result_df = existing_df.drop(columns=list(to_replace))
         result_df = pd.concat([result_df, new_df], axis=1)
 
@@ -229,8 +176,7 @@ class CacheManager:
         }
 
     def _log_merge_result(self, merge_info: dict) -> None:
-        """
-        打印合并结果的友好日志
+        """输出合并结果日志。
 
         Args:
             merge_info: 合并信息字典
@@ -239,58 +185,47 @@ class CacheManager:
         appended = merge_info["appended"]
         kept = merge_info["kept"]
 
-        # 打印替换信息
         if replaced:
-            print(f"    🔄 更新已有因子 ({len(replaced)}个):")
+            print(f"[合并] 替换列 ({len(replaced)}):")
             for col in replaced:
                 print(f"       - {col}")
 
-        # 打印追加信息
         if appended:
-            print(f"    ➕ 追加新因子 ({len(appended)}个):")
+            print(f"[合并] 新增列 ({len(appended)}):")
             for col in appended:
                 print(f"       - {col}")
 
-        # 打印保留信息
         if kept:
-            print(f"    ✅ 保留已有因子 ({len(kept)}个):")
+            print(f"[合并] 保留列 ({len(kept)}):")
             for col in kept:
                 print(f"       - {col}")
 
-        # 如果没有任何变化
         if not replaced and not appended:
-            print("    ✅ 因子无变化，跳过写入")
-
-    # ========================================================================
-    # 数据读取
-    # ========================================================================
+            print("[合并] 无需合并，数据未变更")
 
     def read_dataframe(
         self,
         data_type: str,
         columns: Optional[list[str]] = None,
     ) -> pd.DataFrame:
-        """
-        从 Parquet 读取 DataFrame
+        """从Parquet缓存读取DataFrame。
 
-        特殊处理：
-        - 收益率数据优先复用all市场文件
-        - 风格数据优先复用all市场文件
-        - 支持部分列读取（性能优化）
-        - 友好的错误提示
+        读取逻辑：
+        - returns和styles优先读取all市场
+        - 支持指定列读取
+        - 缺失列会提供明确的错误提示
 
         Args:
-            data_type: 数据类型标识
-            columns: 要读取的列（None=全部）
+            data_type: 数据类型
+            columns: 要读取的列，None表示读取全部
 
         Returns:
             DataFrame
 
         Raises:
-            FileNotFoundError: 文件不存在
+            FileNotFoundError: 缓存文件不存在
             ValueError: 请求的列不存在
         """
-        # returns 和 styles 数据优先查找all市场文件，支持跨市场复用
         if data_type in ["returns", "styles"]:
             all_path = (
                 self.CACHE_DIR
@@ -298,8 +233,8 @@ class CacheManager:
             )
             if all_path.exists():
                 if self.market != "all":
-                    data_name = "收益率" if data_type == "returns" else "风格数据"
-                    print(f"    ⚡ 复用all市场{data_name}数据 (跨市场复用)")
+                    data_name = "收益率" if data_type == "returns" else "风格因子"
+                    print(f"[提示] 从all市场读取{data_name}（统一市场）")
                 path = all_path
             else:
                 path = self.get_parquet_path(data_type)
@@ -307,11 +242,8 @@ class CacheManager:
             path = self.get_parquet_path(data_type)
 
         if not path.exists():
-            raise FileNotFoundError(
-                f"❌ Cache 文件不存在: {path}\n   请先运行 step1 生成 cache"
-            )
+            raise FileNotFoundError(f"缓存文件不存在: {path}\n请先运行 step1 生成缓存")
 
-        # 检查请求的列是否存在（如果指定了列）
         if columns is not None:
             try:
                 import pyarrow.parquet as pq
@@ -323,24 +255,21 @@ class CacheManager:
                 if missing_cols:
                     available_cols = sorted(existing_cols)
                     raise ValueError(
-                        f"❌ 请求的因子不存在:\n"
-                        f"   缺失: {sorted(missing_cols)}\n"
-                        f"   可用: {available_cols}\n"
+                        f"请求的列不存在:\n"
+                        f"   缺失列: {sorted(missing_cols)}\n"
+                        f"   可用列: {available_cols}\n"
                         f"   文件: {path.name}\n"
-                        f"\n"
-                        f"💡 建议:\n"
-                        f"   - 先运行 step1 生成缺失的因子:\n"
+                        f"\n解决方法:\n"
+                        f"   - 运行 step1 生成缺失列:\n"
                         f'     python step1/cli.py --factor-formulas "{" ".join(missing_cols)}" ...'
                     )
             except Exception as e:
-                # 如果读取schema失败，直接尝试读取数据
                 if "requested columns not present" in str(e):
                     raise e
 
         if columns is None:
             return pd.read_parquet(path)
         else:
-            # 部分列读取（高效）
             return pd.read_parquet(path, columns=columns)
 
     def read_columns(
@@ -348,21 +277,16 @@ class CacheManager:
         columns: list[str],
         data_type: str,
     ) -> pd.DataFrame:
-        """
-        只读取指定的列（优化性能）
+        """读取指定的列。
 
         Args:
             columns: 列名列表
-            data_type: 数据类型标识
+            data_type: 数据类型
 
         Returns:
-            DataFrame（只包含指定的列）
+            DataFrame
         """
         return self.read_dataframe(data_type, columns=columns)
-
-    # ========================================================================
-    # 工具方法
-    # ========================================================================
 
     def check_columns(
         self,
@@ -370,13 +294,12 @@ class CacheManager:
         required_columns: list[str],
         verbose: bool = False,
     ) -> dict:
-        """
-        检查请求的列是否都存在（优化：只读元数据，不读数据）
+        """检查所需列是否存在于缓存中。
 
         Args:
-            data_type: 数据类型标识
-            required_columns: 需要检查的列名列表
-            verbose: 是否打印详细信息
+            data_type: 数据类型
+            required_columns: 需要的列列表
+            verbose: 是否输出详细信息
 
         Returns:
             检查结果字典:
@@ -387,7 +310,6 @@ class CacheManager:
                 'path': Path  # 文件路径
             }
         """
-        # 处理 returns 和 styles 的跨市场复用
         if data_type in ["returns", "styles"]:
             all_path = (
                 self.CACHE_DIR
@@ -405,14 +327,12 @@ class CacheManager:
                 "path": path,
             }
 
-        # 只读 schema（元数据），不读数据（性能优化）
         try:
             import pyarrow.parquet as pq
 
             schema = pq.read_schema(path)
             existing_cols = set(schema.names)
         except Exception:
-            # 如果 pyarrow 不可用，回退到 pandas
             df = pd.read_parquet(path)
             existing_cols = set(df.columns)
 
@@ -427,7 +347,7 @@ class CacheManager:
 
         if verbose and missing_cols:
             print(
-                f"⚠️  部分因子缺失:\n"
+                f"列缺失:\n"
                 f"   缺失: {sorted(missing_cols)}\n"
                 f"   可用: {sorted(existing_cols)}"
             )
@@ -435,11 +355,10 @@ class CacheManager:
         return result
 
     def list_columns(self, data_type: str) -> list[str]:
-        """
-        列出 Parquet 文件中的所有列
+        """列出缓存文件中的所有列。
 
         Args:
-            data_type: 数据类型标识
+            data_type: 数据类型
 
         Returns:
             列名列表
@@ -453,11 +372,10 @@ class CacheManager:
         return df.columns.tolist()
 
     def file_exists(self, data_type: str) -> bool:
-        """
-        检查 Parquet 文件是否存在
+        """检查Parquet缓存文件是否存在。
 
         Args:
-            data_type: 数据类型标识
+            data_type: 数据类型
 
         Returns:
             是否存在
@@ -465,14 +383,13 @@ class CacheManager:
         return self.get_parquet_path(data_type).exists()
 
     def get_file_info(self, data_type: str) -> dict:
-        """
-        获取文件信息
+        """获取缓存文件信息。
 
         Args:
-            data_type: 数据类型标识
+            data_type: 数据类型
 
         Returns:
-            信息字典
+            文件信息字典
         """
         path = self.get_parquet_path(data_type)
 
@@ -492,11 +409,10 @@ class CacheManager:
         }
 
     def delete_file(self, data_type: str) -> bool:
-        """
-        删除 Parquet 文件
+        """删除Parquet缓存文件。
 
         Args:
-            data_type: 数据类型标识
+            data_type: 数据类型
 
         Returns:
             是否成功删除
@@ -509,8 +425,7 @@ class CacheManager:
         return False
 
     def clean_all(self) -> int:
-        """
-        清理当前 market+日期组合的所有 cache 文件
+        """清理当前market+日期范围的所有缓存文件。
 
         Returns:
             删除的文件数量
@@ -524,8 +439,7 @@ class CacheManager:
         return len(files)
 
     def list_cache_files(self) -> list[Path]:
-        """
-        列出 cache 目录中所有 Parquet 文件
+        """列出缓存目录中的所有Parquet文件。
 
         Returns:
             文件路径列表
