@@ -25,79 +25,74 @@ def calculate_returns(
     factor_formulas: list[str],
     provider_uri: str,
 ) -> None:
-    """
-
+    """计算因子收益率回归系数。
 
     Parameters:
     -----------
     market : str
-
+        股票池名称
     start_date : str
-         (YYYY-MM-DD)
+        开始日期 (YYYY-MM-DD)
     end_date : str
-         (YYYY-MM-DD)
+        结束日期 (YYYY-MM-DD)
     factor_formulas : list[str]
-
+        因子公式列表
     provider_uri : str
-        Qlib
+        Qlib数据目录
 
     Returns:
     --------
     None
     """
-    # cache
     cache_mgr = CacheManager(market, start_date, end_date)
 
-    print("\n Step3: ")
+    print("\nStep3: 收益率计算")
 
-    #
-    print(" ...")
+    print("  读取缓存...")
     factor_std = cache_mgr.read_dataframe("factor_std")
     styles_df = cache_mgr.read_dataframe("styles")
     ret_df = cache_mgr.read_dataframe("returns")
 
-    #
-    # : joinconcat,(all)
-    # factor_stdstyles_dfcsi300, ret_dfall
     data = factor_std.join(styles_df, how="left")
-    data = data.join(ret_df, how="left")  # left joinall
+    data = data.join(ret_df, how="left")
 
-    print(f"   : {data.shape}")
-    print(f"    - : {len(factor_std.index.get_level_values('instrument').unique())}")
-    print(f"    - : {len(ret_df.index.get_level_values('instrument').unique())}")
-    print(f"    - : {len(data.index.get_level_values('instrument').unique())}")
+    print(f"    合并后数据: {data.shape}")
+    print(
+        f"    因子股票数: {len(factor_std.index.get_level_values('instrument').unique())}"
+    )
+    print(
+        f"    收益率股票数: {len(ret_df.index.get_level_values('instrument').unique())}"
+    )
+    print(
+        f"    合并后股票数: {len(data.index.get_level_values('instrument').unique())}"
+    )
 
-    #
     factor_cols = [col for col in factor_std.columns if col in factor_formulas]
     ret_cols = [col for col in ret_df.columns if col.startswith("ret_")]
 
-    #
     if not factor_cols:
-        print(f" :  {factor_formulas} cache")
+        print(f"  错误: 未找到因子 {factor_formulas} 在缓存中")
         print(
-            f"  cache: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}"
+            f"  可用因子: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}"
         )
         sys.exit(1)
 
-    # step1$total_mv$log_mv
     required_style_cols = ["$total_mv", "$industry", "$float_mv"]
     missing_cols = [
         col for col in ret_cols + required_style_cols if col not in data.columns
     ]
     if missing_cols:
-        print(f" : : {missing_cols}")
+        print(f"  错误: 缺失列: {missing_cols}")
         sys.exit(1)
 
-    #
     needed_cols = factor_cols + ret_cols + required_style_cols
     data = data[needed_cols]
 
-    print(f"   : {len(factor_cols)}")
-    print(f"   : {len(ret_cols)}")
-    print(f"   : {required_style_cols}")
+    print(f"    因子数: {len(factor_cols)}")
+    print(f"    收益率列数: {len(ret_cols)}")
+    print(f"    风格列: {required_style_cols}")
 
-    #
-    print("  ...")
+    print("  执行回归...")
     coef_list = []
     t_list = []
     for dt in data.index.get_level_values("datetime").unique():
@@ -124,13 +119,11 @@ def calculate_returns(
         t_all = pd.concat(t_list, axis=0)
 
         cache_mgr.write_dataframe(coef_all, "return_coef")
-        print(f"   : return_coef ({coef_all.shape})")
+        print(f"    return_coef: {coef_all.shape}")
 
         cache_mgr.write_dataframe(t_all, "return_tval")
-        print(f"   : return_tval ({t_all.shape})")
+        print(f"    return_tval: {t_all.shape}")
 
-        # 内部辅助函数：计算回归系数的统计摘要
-        # 内部辅助函数：计算t统计量的摘要
         def _coef_summary(series: pd.Series) -> pd.Series:
             """计算回归系数的统计摘要。
 
@@ -186,7 +179,6 @@ def calculate_returns(
             {col: _t_summary(t_all[col]) for col in t_all.columns}
         ).T
 
-        #
         start_compact = start_date.replace("-", "")
         end_compact = end_date.replace("-", "")
         coef_summary.to_excel(
@@ -195,9 +187,9 @@ def calculate_returns(
         t_summary.to_excel(
             f".cache/{market}_{start_compact}_{end_compact}__return_tval_summary.xlsx"
         )
-        print("   ")
+        print("    Excel文件已保存")
 
-        print("\n Step3!")
+        print("\nStep3完成!")
     else:
-        print(" : ")
+        print("  错误: 回归结果为空")
         sys.exit(1)

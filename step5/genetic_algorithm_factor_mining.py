@@ -25,48 +25,42 @@ def mine_factors_with_gp(
     provider_uri: str,
     random_state: int = None,
 ) -> None:
-    """
-
+    """使用遗传规划挖掘因子表达式。
 
     Parameters:
     -----------
     market : str
-
+        股票池名称
     start_date : str
-         (YYYY-MM-DD)
+        开始日期 (YYYY-MM-DD)
     end_date : str
-         (YYYY-MM-DD)
+        结束日期 (YYYY-MM-DD)
     provider_uri : str
-        Qlib
+        Qlib数据目录
     random_state : int
-
+        随机种子
     """
-    #
     if random_state is None:
         import random
 
         random_state = random.randint(0, 2**32 - 1)
-        print(f"  : {random_state}")
+        print(f"  随机种子: {random_state}")
 
-    #  Qlib
-    print(f"  Qlib: {provider_uri}")
+    print(f"初始化 Qlib: {provider_uri}")
     qlib.init(provider_uri=provider_uri, region=REG_CN)
 
-    # cache
     cache_mgr = CacheManager(market, start_date, end_date)
 
-    print("\n Step5: ")
-    print(f"  : {market}")
-    print(f"  : {start_date} ~ {end_date}")
-    print(f"  : {len(DEFAULT_FEATURES)} ")
-    print(f"  : {DEFAULT_TARGET}")
-    print(f"  : {random_state}")
+    print("\nStep5: GP因子挖掘")
+    print(f"  市场: {market}")
+    print(f"  日期: {start_date} ~ {end_date}")
+    print(f"  特征数: {len(DEFAULT_FEATURES)}")
+    print(f"  目标: {DEFAULT_TARGET}")
+    print(f"  随机种子: {random_state}")
 
-    #
     instruments = D.instruments(market=market)
 
-    #
-    print(" ...")
+    print("  加载特征数据...")
     features_df = D.features(
         instruments=instruments,
         fields=DEFAULT_FEATURES,
@@ -78,17 +72,15 @@ def mine_factors_with_gp(
     features_df = features_df.groupby(level="instrument", group_keys=False).apply(
         lambda x: x.ffill().bfill()
     )
-    print(f"   : {features_df.shape}")
+    print(f"    特征数据: {features_df.shape}")
 
-    # cache
-    print(" ...")
+    print("  加载收益率数据...")
     ret_df = cache_mgr.read_dataframe("returns")
     ret_df = ret_df[["ret_1d"]]
     ret_df.columns = [DEFAULT_TARGET]
-    print(f"   : {ret_df.shape}")
+    print(f"    收益率数据: {ret_df.shape}")
 
-    # GP
-    print("   GP ...")
+    print("  训练GP模型...")
     miner = FactorMiner(
         features=DEFAULT_FEATURES,
         target=DEFAULT_TARGET,
@@ -98,8 +90,7 @@ def mine_factors_with_gp(
 
     expressions = miner.run(features_df, ret_df)
 
-    #
-    print(" ...")
+    print("  保存结果...")
     output_dir = Path(".cache")
     output_dir.mkdir(exist_ok=True)
 
@@ -114,12 +105,11 @@ def mine_factors_with_gp(
         for expr in expressions:
             f.write(f"{expr}\n")
 
-    print(f"   : {output_path}")
+    print(f"    表达式文件: {output_path}")
 
-    #
-    print(f"\n  {len(expressions)} :")
+    print(f"\n  共生成 {len(expressions)} 个因子:")
     for i, expr in enumerate(expressions, 1):
         print(f"\n  Factor {i}:")
         print(f"    {expr}")
 
-    print("\n Step5!")
+    print("\nStep5完成!")

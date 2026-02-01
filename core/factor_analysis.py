@@ -60,21 +60,21 @@ def neutralize_industry_marketcap(
     float_mv_col: str = "$float_mv",
     eps: float = 1e-8,
 ) -> pd.DataFrame:
-    """
+    """行业市值中性化。
 
-
-    factor ~ log(total_mv) + industry_dummiesWLSsqrt(float_mv)
+    使用WLS回归对因子进行中性化：factor ~ log(total_mv) + industry_dummies，
+    权重为sqrt(float_mv)
 
     Args:
         group: pd.DataFrame index(instrument, datetime)
-        factor_list: List[str]
-        total_mv_col: str
-        industry_col: str
-        float_mv_col: str
-        eps: float 0
+        factor_list: List[str] 因子列表
+        total_mv_col: str 总市值列名
+        industry_col: str 行业列名
+        float_mv_col: str 流通市值列名
+        eps: float 防止log(0)的小常数
 
     Returns:
-        pd.DataFrame
+        pd.DataFrame 中性化后的因子值
     """
     if not factor_list:
         return pd.DataFrame(index=group.index)
@@ -85,34 +85,27 @@ def neutralize_industry_marketcap(
         else "unknown_dt"
     )
 
-    # 1)
     log_mv = np.log(group[total_mv_col].astype("float64").clip(lower=eps))
     X_continuous = pd.DataFrame({"log_mv": log_mv}, index=group.index)
 
-    #
     X_dummies = pd.get_dummies(
         group[industry_col], drop_first=True, prefix=industry_col, dtype=float
     )
     if X_dummies.empty:
-        print(f"[neutralize_industry_marketcap] {dt} ")
+        print(f"[neutralize_industry_marketcap] {dt} 行业虚拟变量为空")
 
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
-    #
     w_all = np.sqrt(group[float_mv_col].astype("float64").clip(lower=eps)).rename("_w")
     w_mean = w_all.mean()
     if w_mean <= eps:
         w_mean = 1.0
     w_all = (w_all / w_mean).rename("_w")
 
-    # 2) dtype
     result = group[factor_list].copy()
-    # NaN
     result.loc[:, :] = np.nan
 
-    # 3) X_stylesw_all
     for factor_name in factor_list:
-        #  +  +
         reg_data = pd.concat(
             [group[[factor_name]].astype("float64"), X_styles, w_all],
             axis=1,
@@ -123,15 +116,14 @@ def neutralize_industry_marketcap(
             drop_ratio = (before_drop - len(reg_data)) / before_drop
             if drop_ratio > 0.1:
                 print(
-                    f"[neutralize_industry_marketcap] {dt} {factor_name} dropna  {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
+                    f"[neutralize_industry_marketcap] {dt} {factor_name} dropna比例 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
                 )
 
-        n_params = len(X_styles.columns) + 2  #  +  +
+        n_params = len(X_styles.columns) + 2
         if len(reg_data) < n_params:
             print(
-                f"[neutralize_industry_marketcap] {dt} {factor_name}  {len(reg_data)}  {n_params} NaN"
+                f"[neutralize_industry_marketcap] {dt} {factor_name} 样本不足 {len(reg_data)} < {n_params} 返回NaN"
             )
-            # result[factor_name] NaN
             continue
 
         X_reg = sm.add_constant(reg_data[X_styles.columns], has_constant="add")
@@ -142,14 +134,14 @@ def neutralize_industry_marketcap(
             residual = model.resid.astype(group[factor_name].dtype, copy=False)
             result.loc[residual.index, factor_name] = residual
 
-            #
             if model.rsquared < 0.1:
                 print(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
             elif model.rsquared < 0.05:
                 print(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
         except Exception as e:
-            print(f"[neutralize_industry_marketcap] {dt} {factor_name} {e} NaN")
-            # result[factor_name] NaN
+            print(
+                f"[neutralize_industry_marketcap] {dt} {factor_name} 回归失败: {e} 返回NaN"
+            )
 
     return result
 
@@ -163,25 +155,23 @@ def factor_return_industry_marketcap(
     float_mv_col: str = "$float_mv",
     eps: float = 1e-8,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
+    """计算因子的收益率回归系数。
 
-
-    factorret_col
-        ret = β0 + β1*factor + β2*log(total_mv) + Σβj*industry_j + ε
-    WLSsqrt(float_mv)
+    对每个因子和收益组合进行回归：ret = β0 + β1*factor + β2*log(total_mv) + Σβj*industry_j + ε
+    使用WLS回归，权重为sqrt(float_mv)
 
     Args:
         group: pd.DataFrame index(instrument, datetime)
-        factor_list: List[str]
-        ret_list: List[str]
-        total_mv_col: str
-        industry_col: str
-        float_mv_col: str
-        eps: float 0
+        factor_list: List[str] 因子列表
+        ret_list: List[str] 收益率列表
+        total_mv_col: str 总市值列名
+        industry_col: str 行业列名
+        float_mv_col: str 流通市值列名
+        eps: float 防止log(0)的小常数
 
     Returns:
-        coef_df: datetime{factor}_{ret}
-        t_df: tdatetime{factor}_{ret}
+        coef_df: datetime索引，列为{factor}_{ret}的回归系数
+        t_df: datetime索引，列为{factor}_{ret}的t统计量
     """
     if not factor_list or not ret_list:
         return pd.DataFrame(), pd.DataFrame()
@@ -192,39 +182,33 @@ def factor_return_industry_marketcap(
         else "unknown_dt"
     )
 
-    # 1)
     log_mv = np.log(group[total_mv_col].astype("float64").clip(lower=eps))
     X_continuous = pd.DataFrame({"log_mv": log_mv}, index=group.index)
 
-    #
     X_dummies = pd.get_dummies(
         group[industry_col], drop_first=True, prefix=industry_col, dtype=float
     )
     if X_dummies.empty:
-        print(f"[factor_return] {dt} ")
+        print(f"[factor_return] {dt} 行业虚拟变量为空")
 
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
-    #
     w_all = np.sqrt(group[float_mv_col].astype("float64").clip(lower=eps)).rename("_w")
     w_mean = w_all.mean()
     if w_mean <= eps:
         w_mean = 1.0
     w_all = (w_all / w_mean).rename("_w")
 
-    # 2)  ×
     coef_row = {}
     t_row = {}
 
     for factor_name in factor_list:
-        # Xret_col
         base_X = pd.concat([group[[factor_name]].astype("float64"), X_styles], axis=1)
 
         for ret_col in ret_list:
             if group[ret_col].dropna().empty:
                 continue
 
-            #
             reg_data = pd.concat(
                 [group[[ret_col]].astype("float64"), base_X, w_all],
                 axis=1,
@@ -235,20 +219,19 @@ def factor_return_industry_marketcap(
                 drop_ratio = (before_drop - len(reg_data)) / before_drop
                 if drop_ratio > 0.1:
                     print(
-                        f"[factor_return] {dt} {factor_name}-{ret_col} dropna  {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
+                        f"[factor_return] {dt} {factor_name}-{ret_col} dropna比例 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
                     )
 
-            n_params = base_X.shape[1] + 1  #  +  +
+            n_params = base_X.shape[1] + 1
             col_name = f"{factor_name}_{ret_col}"
             if len(reg_data) < n_params:
                 print(
-                    f"[factor_return] {dt}  {factor_name}  {ret_col}  {len(reg_data)} <  {n_params} NaN"
+                    f"[factor_return] {dt} 因子 {factor_name} 收益 {ret_col} 样本不足 {len(reg_data)} < {n_params} 返回NaN"
                 )
                 coef_row[col_name] = np.nan
                 t_row[col_name] = np.nan
                 continue
 
-            #
             X_reg = sm.add_constant(reg_data.drop(columns=[ret_col, "_w"]))
             Y_reg = reg_data[ret_col]
             w_reg = reg_data["_w"]
@@ -258,17 +241,17 @@ def factor_return_industry_marketcap(
                 coef_row[col_name] = model.params.get(factor_name, np.nan)
                 t_row[col_name] = model.tvalues.get(factor_name, np.nan)
 
-                #
                 if model.rsquared < 0.1:
                     print(
                         f"[factor_return] {dt} {factor_name}-{ret_col} R²={model.rsquared:.3f}"
                     )
             except Exception as e:
-                print(f"[factor_return] {dt} {factor_name}  {ret_col} {e} NaN")
+                print(
+                    f"[factor_return] {dt} {factor_name} 收益 {ret_col} 回归失败: {e} 返回NaN"
+                )
                 coef_row[col_name] = np.nan
                 t_row[col_name] = np.nan
 
-    # 3) DataFrame
     coef_df = pd.DataFrame([coef_row], index=[dt])
     t_df = pd.DataFrame([t_row], index=[dt])
 
@@ -283,21 +266,20 @@ def summarize_ic(
     date_col: str = "datetime",
     dropna: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    ×  IC / RankIC
+    """计算IC和RankIC及其统计摘要。
 
+    Args:
+        group: pd.DataFrame MultiIndex (instrument, datetime)
+        factor_list: List[str] 因子列表
+        ret_list: List[str] 收益率列表
+        date_col: str 日期列名，传给calc_ic
+        dropna: bool 是否删除NaN值，传给calc_ic
 
-       group: pd.DataFrame
-       factor_list: List[str]
-       ret_list: List[str]
-       date_col: str  calc_ic
-       dropna: bool  calc_ic
-
-
-       ic_map: {(fac, ret): IC }
-       ric_map: {(fac, ret): RankIC }
-       ic_summary_df:  (fac, ret)  IC
-       ric_summary_df:  (fac, ret)  RankIC
+    Returns:
+        ic_df: datetime索引，列为{factor}_{ret}的IC序列
+        ric_df: datetime索引，列为{factor}_{ret}的RankIC序列
+        ic_summary_df: (factor, ret)为索引的IC统计摘要
+        ric_summary_df: (factor, ret)为索引的RankIC统计摘要
     """
 
     def _summary(series: pd.Series) -> pd.Series:
@@ -359,18 +341,17 @@ def summarize_group_return(
     *,
     quantile: float = 0.2,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    ×
+    """计算分组收益率及其统计摘要。
 
+    Args:
+        group: pd.DataFrame MultiIndex (instrument, datetime)
+        factor_list: List[str] 因子列表
+        ret_list: List[str] 收益率列表
+        quantile: float 分组分位数
 
-       group: pd.DataFrame
-       factor_list: List[str]
-       ret_list: List[str]
-       quantile: float
-
-
-       daily_df: pd.DataFrame {factor}_{ret}  long_short/long_avg
-       summary_df: pd.DataFrame
+    Returns:
+        daily_df: datetime索引，多级列{factor}_{ret}包含long_short和long_avg
+        summary_df: 统计摘要DataFrame
     """
 
     def _summary(series: pd.Series) -> pd.Series:
@@ -423,12 +404,16 @@ def summarize_autocorr(
     *,
     lag: int = 1,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
+    """计算因子自相关性及其统计摘要。
 
+    Args:
+        group: pd.DataFrame MultiIndex (instrument, datetime)
+        factor_list: List[str] 因子列表
+        lag: int 滞后期数
 
-
-    ac_df: pd.DataFrame
-    summary_df: pd.DataFrame
+    Returns:
+        ac_df: datetime索引，列为各因子的自相关序列
+        summary_df: 因子为索引的统计摘要
     """
 
     def _summary(series: pd.Series) -> pd.Series:
@@ -465,12 +450,17 @@ def summarize_turnover(
     N: int = 5,
     lag: int = 1,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    qlib  Top/Bottom turnover
+    """计算因子换手率（Top/Bottom N档）。
 
+    Args:
+        group: pd.DataFrame MultiIndex (instrument, datetime)
+        factor_list: List[str] 因子列表
+        N: int 分组数
+        lag: int 滞后期数
 
-       daily_df: pd.DataFrame top/bottom
-       summary_df: pd.DataFrame/
+    Returns:
+        daily_df: datetime索引，多级列为{factor}/(top, bottom)的换手率
+        summary_df: 统计摘要DataFrame
     """
 
     def _compute(score_col: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -561,33 +551,27 @@ def save_performance_graphs(
     output_dir: Path,
     graph_names: Optional[List[str]] = None,
 ) -> None:
-    """
-     html ×
+    """生成绩效分析图表HTML。
 
     Args:
-        merged_df:
-        factor_list:
-        ret_list:
-        output_dir:
-        graph_names:  ["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
+        merged_df: pd.DataFrame MultiIndex数据
+        factor_list: List[str] 因子列表
+        ret_list: List[str] 收益率列表
+        output_dir: Path 输出目录
+        graph_names: List[str] 图表名称，默认["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
     """
     names = graph_names or ["group_return", "pred_ic", "pred_autocorr", "pred_turnover"]
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ×
     for factor_name in factor_list:
         for ret_col in ret_list:
-            # ×
-            # pred_labelDataFrame
             pred_label = merged_df[[factor_name, ret_col]].copy()
-            pred_label.columns = ["score", "label"]  # qlib
+            pred_label.columns = ["score", "label"]
 
-            # factor_ret/
             subdir = out_dir / f"{factor_name}_{ret_col}"
             subdir.mkdir(parents=True, exist_ok=True)
 
-            #
             for name in names:
                 try:
                     figs = model_performance_graph(
@@ -603,7 +587,6 @@ def save_performance_graphs(
                         f"[save_performance_graphs] {factor_name}-{ret_col} {name}: {e}"
                     )
 
-            # score_ic
             try:
                 figs = score_ic_graph(pred_label, show_notebook=False)
                 for i, fig in enumerate(figs, start=1):
@@ -614,4 +597,4 @@ def save_performance_graphs(
                     f"[save_performance_graphs] {factor_name}-{ret_col} score_ic: {e}"
                 )
 
-    print(f"   : {out_dir}")
+    print(f"图表已保存: {out_dir}")

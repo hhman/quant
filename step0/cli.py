@@ -83,7 +83,7 @@ def run_command(cmd: str, description: str = "") -> None:
             text=True,
         )
     except subprocess.CalledProcessError as e:
-        print(f"❌ 命令执行失败: {description}")
+        print(f"命令执行失败: {description}")
         sys.exit(e.returncode)
 
 
@@ -102,21 +102,14 @@ def validate_input_directories() -> None:
 
     for dir_name, dir_desc in directories.items():
         if not Path(dir_name).exists():
-            print(f"❌ {dir_desc}不存在: {dir_name}")
+            print(f"{dir_desc}不存在: {dir_name}")
             sys.exit(1)
 
 
 def main():
-    """
-    主入口函数
-    """
-    # 1. 解析 CLI 参数
     args = parse_args()
-
-    # 2. 标准化参数
     params = normalize_args(args)
 
-    # 3. 目录配置
     stock_dir = "stock"
     index_dir = "index"
     fin_dir = "finance"
@@ -125,10 +118,8 @@ def main():
     qlib_dir = Path(cache_dir) / "qlib_data"
     qlib_src_dir = "qlib_src"
 
-    # 4. 检查必要目录
     validate_input_directories()
 
-    # 5. Step0.1: 清洗日线数据
     from step0.日线数据清洗 import process_stock_data
 
     process_stock_data(
@@ -139,7 +130,6 @@ def main():
         output_dir=str(output_dir),
     )
 
-    # 6. Step0.2: 转换为Qlib二进制格式
     run_command(
         f'python "{qlib_src_dir}/scripts/dump_bin.py" dump_all '
         f'--data_path "{output_dir}" '
@@ -148,7 +138,6 @@ def main():
         description="转换为Qlib二进制格式",
     )
 
-    # 7. Step0.3: 复制membership文件
     instruments_src = output_dir / "instruments"
     instruments_dst = qlib_dir / "instruments"
 
@@ -156,14 +145,13 @@ def main():
 
     txt_files = list(instruments_src.glob("*.txt"))
     if not txt_files:
-        print(f"❌ 未找到成分股文件: {instruments_src}/*.txt")
+        print(f"未找到成分股文件: {instruments_src}/*.txt")
         sys.exit(1)
 
     for txt_file in txt_files:
         dst_file = instruments_dst / txt_file.name
         run_command(f'cp "{txt_file}" "{dst_file}"', description="复制membership文件")
 
-    # 8. Step0.4: 透视财务数据
     from step0.财务数据透视 import process_financial_data
 
     process_financial_data(
@@ -173,7 +161,6 @@ def main():
         output_dir=str(output_dir / "financial"),
     )
 
-    # 9. Step0.5: 转换财务数据为Qlib格式
     run_command(
         f'python "{qlib_src_dir}/scripts/dump_pit.py" '
         f'--csv_path "{output_dir}/financial" '
@@ -181,7 +168,6 @@ def main():
         description="转换财务数据为Qlib格式",
     )
 
-    # 10. Step0.6: 数据质量校验
     run_command(
         f'python "{qlib_src_dir}/scripts/check_dump_bin.py" check '
         f'--qlib_dir "{qlib_dir}" '
@@ -195,7 +181,7 @@ def main():
         description="数据质量校验 (check_data_health)",
     )
 
-    print("✅ Step0完成!")
+    print("Step0完成!")
 
 
 if __name__ == "__main__":

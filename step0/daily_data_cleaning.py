@@ -498,8 +498,6 @@ def process_stock_data(
     category_records: dict[str, list[MembershipRecord]] = {}
     industry_mapping: dict[str, int] = {}
 
-    # 处理指数文件
-    print("处理指数文件...")
     index_results = []
     for csv_path in iter_csv_files(index_path):
         result = process_index_file(csv_path, start_ts, end_ts)
@@ -513,8 +511,6 @@ def process_stock_data(
                 )
             )
 
-    # 处理股票文件
-    print("处理股票文件...")
     stock_results = []
     for csv_path in iter_csv_files(stock_path):
         result = process_stock_file(
@@ -534,15 +530,12 @@ def process_stock_data(
                 )
             )
 
-    # 写入处理后的数据
-    print("写入处理后的数据...")
     write_processed_results(stock_results, output_path)
     write_processed_results(index_results, output_path)
     save_industry_mapping(industry_mapping, output_path)
     write_category_files(category_records, output_path)
 
-    print("✅ 处理完成！")
-    print(f"   股票文件: {len(stock_results)}")
-    print(f"   指数文件: {len(index_results)}")
-    print(f"   行业映射: {len(industry_mapping)}个")
-    print(f"   输出目录: {output_path}")
+    print(
+        f"处理完成: 股票 {len(stock_results)}, 指数 {len(index_results)}, 行业 {len(industry_mapping)}"
+    )
+    print(f"输出目录: {output_path}")

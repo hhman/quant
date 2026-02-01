@@ -31,71 +31,64 @@ def evaluate_performance(
     factor_formulas: list[str],
     provider_uri: str,
 ) -> None:
-    """
-
+    """评估因子绩效指标（IC、分组收益、自相关、换手率等）。
 
     Parameters:
     -----------
     market : str
-
+        股票池名称
     start_date : str
-         (YYYY-MM-DD)
+        开始日期 (YYYY-MM-DD)
     end_date : str
-         (YYYY-MM-DD)
+        结束日期 (YYYY-MM-DD)
     factor_formulas : list[str]
-
+        因子公式列表
     provider_uri : str
-        Qlib
+        Qlib数据目录
 
     Returns:
     --------
     None
     """
-    # cache
     cache_mgr = CacheManager(market, start_date, end_date)
 
-    # qlib
-    print(f" Qlib: {provider_uri}")
+    print(f"初始化 Qlib: {provider_uri}")
     qlib.init(provider_uri=provider_uri, region=REG_CN)
 
-    print("\n Step4: ")
+    print("\nStep4: 因子绩效评估")
 
-    #
-    print(" ...")
+    print("  读取缓存...")
     factor_df = cache_mgr.read_dataframe("neutralized")
-    print(f"   : {factor_df.shape}")
+    print(f"    neutralized: {factor_df.shape}")
 
     ret_df = cache_mgr.read_dataframe("returns")
-    print(f"   : {ret_df.shape}")
+    print(f"    returns: {ret_df.shape}")
 
     if factor_df.empty:
-        print(" : ")
-        print("   step2")
+        print("  错误: 中性化因子为空")
+        print("    请先运行 step2")
         sys.exit(1)
 
     if ret_df.empty:
-        print(" : ")
-        print("   step1")
+        print("  错误: 收益率为空")
+        print("    请先运行 step1")
         sys.exit(1)
 
-    #
     if factor_df.index.nlevels != 2 or ret_df.index.nlevels != 2:
-        print(" : ")
-        print(f"   factor_df: {factor_df.index.names}")
-        print(f"   ret_df: {ret_df.index.names}")
-        print("   : (instrument, datetime)")
+        print("  错误: 索引格式错误")
+        print(f"    factor_df: {factor_df.index.names}")
+        print(f"    ret_df: {ret_df.index.names}")
+        print("    期望格式: (instrument, datetime)")
         sys.exit(1)
 
     merged_df = factor_df.join(ret_df, how="left")
     factor_list = list(factor_df.columns)
     ret_list = list(ret_df.columns)
 
-    #
     start_compact = start_date.replace("-", "")
     end_compact = end_date.replace("-", "")
 
-    # IC / RankIC
-    print("  IC/RankIC...")
+    print("  计算IC/RankIC...")
     ic_df, ric_df, ic_summary, ric_summary = summarize_ic(
         merged_df, factor_list=factor_list, ret_list=ret_list
     )
@@ -108,10 +101,9 @@ def evaluate_performance(
         f".cache/{market}_{start_compact}_{end_compact}__rank_ic_summary.xlsx",
         index=True,
     )
-    print(f"   : ic ({ic_df.shape}), rank_ic ({ric_df.shape})")
+    print(f"    ic: {ic_df.shape}, rank_ic: {ric_df.shape}")
 
-    #
-    print("  ...")
+    print("  计算分组收益...")
     group_daily_df, group_summary = summarize_group_return(
         merged_df,
         factor_list=factor_list,
@@ -123,10 +115,9 @@ def evaluate_performance(
         f".cache/{market}_{start_compact}_{end_compact}__group_return_summary.xlsx",
         index=True,
     )
-    print(f"   : group_return ({group_daily_df.shape})")
+    print(f"    group_return: {group_daily_df.shape}")
 
-    #
-    print("  ...")
+    print("  计算自相关...")
     ac_df, ac_summary = summarize_autocorr(
         merged_df,
         factor_list=factor_list,
@@ -137,10 +128,9 @@ def evaluate_performance(
         f".cache/{market}_{start_compact}_{end_compact}__autocorr_summary.xlsx",
         index=True,
     )
-    print(f"   : autocorr ({ac_df.shape})")
+    print(f"    autocorr: {ac_df.shape}")
 
-    #
-    print("  ...")
+    print("  计算换手率...")
     turnover_daily_df, turnover_summary = summarize_turnover(
         merged_df,
         factor_list=factor_list,
@@ -152,10 +142,9 @@ def evaluate_performance(
         f".cache/{market}_{start_compact}_{end_compact}__turnover_summary.xlsx",
         index=True,
     )
-    print(f"   : turnover ({turnover_daily_df.shape})")
+    print(f"    turnover: {turnover_daily_df.shape}")
 
-    #
-    print("\n  ...")
+    print("\n  生成图表...")
     try:
         graphs_dir = Path(".cache") / "graphs"
         save_performance_graphs(
@@ -165,10 +154,10 @@ def evaluate_performance(
             output_dir=graphs_dir,
             graph_names=["group_return", "pred_ic", "pred_autocorr", "pred_turnover"],
         )
-        print(f"   : {graphs_dir}")
+        print(f"    图表目录: {graphs_dir}")
     except Exception as e:
-        print(f"    : {e}")
-        print("     ...")
+        print(f"    警告: 图表生成失败: {e}")
+        print("    继续执行...")
 
-    print("\n Step4!")
-    print("   : .cache/")
+    print("\nStep4完成!")
+    print("  输出目录: .cache/")

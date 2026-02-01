@@ -83,7 +83,6 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 
 def main():
-    """Step 2主函数：执行因子中性化流程。"""
     args = parse_args()
 
     params = normalize_args(args)
@@ -92,8 +91,7 @@ def main():
 
     neutralize_factors(**params)
 
-    print("\n[完成] Step 2 执行完成!")
-    print("   缓存位置: .cache/")
+    print("Step2完成! 缓存位置: .cache/")
 
 
 if __name__ == "__main__":

@@ -83,7 +83,6 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 
 def main():
-    """Step 3主函数：执行收益率计算流程。"""
     args = parse_args()
 
     params = normalize_args(args)
@@ -92,8 +91,7 @@ def main():
 
     calculate_returns(**params)
 
-    print("\n[完成] Step 3 执行完成!")
-    print("   缓存位置: .cache/")
+    print("Step3完成! 缓存位置: .cache/")
 
 
 if __name__ == "__main__":

@@ -25,71 +25,64 @@ def neutralize_factors(
     factor_formulas: list[str],
     provider_uri: str,
 ) -> None:
-    """
-
+    """对因子进行行业市值中性化处理。
 
     Parameters:
     -----------
     market : str
-
+        股票池名称
     start_date : str
-         (YYYY-MM-DD)
+        开始日期 (YYYY-MM-DD)
     end_date : str
-         (YYYY-MM-DD)
+        结束日期 (YYYY-MM-DD)
     factor_formulas : list[str]
-
+        因子公式列表
     provider_uri : str
-        Qlib
+        Qlib数据目录
 
     Returns:
     --------
     None
     """
-    #  cache manager
     cache_mgr = CacheManager(market, start_date, end_date)
 
-    print("\n Step2: ")
+    print("\nStep2: 因子中性化")
 
-    #  step1  cache
-    print(" ...")
+    print("  读取缓存...")
     try:
         factor_std = cache_mgr.read_dataframe("factor_std")
         styles_df = cache_mgr.read_dataframe("styles")
     except FileNotFoundError as e:
-        print(f" : {e}")
+        print(f"  错误: {e}")
         sys.exit(1)
 
-    print(f"   : {factor_std.shape}")
-    print(f"   : {styles_df.shape}")
+    print(f"    factor_std: {factor_std.shape}")
+    print(f"    styles_df: {styles_df.shape}")
 
-    #  - factor_formulas
     factor_cols = [col for col in factor_std.columns if col in factor_formulas]
 
-    #
     if not factor_cols:
-        print(f" :  {factor_formulas} cache")
+        print(f"  错误: 未找到因子 {factor_formulas} 在缓存中")
         print(
-            f"  cache: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}"
+            f"  可用因子: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}"
         )
         sys.exit(1)
 
-    #
     required_style_cols = ["$total_mv", "$industry", "$float_mv"]
     missing_cols = [col for col in required_style_cols if col not in styles_df.columns]
     if missing_cols:
-        print(f" : : {missing_cols}")
+        print(f"  错误: 缺失列: {missing_cols}")
         sys.exit(1)
 
-    #
     data_for_neutralize = pd.concat(
         [factor_std[factor_cols], styles_df[required_style_cols]], axis=1
     )
 
-    print(f"   : {len(factor_cols)} {factor_cols}")
-    print(f"   : {required_style_cols}")
+    print(f"    待中性化因子数: {len(factor_cols)}")
+    print(f"    因子列: {factor_cols}")
+    print(f"    风格列: {required_style_cols}")
 
-    #
-    print("  ...")
+    print("  执行中性化...")
     result_list = []
     for dt in data_for_neutralize.index.get_level_values("datetime").unique():
         daily_group = (
@@ -112,16 +105,15 @@ def neutralize_factors(
             level=["instrument", "datetime"]
         )
         cache_mgr.write_dataframe(result, "neutralized")
-        print(f"   : neutralized ({result.shape})")
+        print(f"    neutralized: {result.shape}")
 
-        #
-        print("\n :")
+        print("\n  中性化效果检查:")
         merged = result.join(styles_df[["$total_mv"]])
         for factor_col in result.columns:
             corr = merged[factor_col].corr(np.log(merged["$total_mv"]))
-            print(f"  {factor_col} log(): {corr:.4f}")
+            print(f"    {factor_col} vs log(总市值): {corr:.4f}")
 
-        print("\n :")
+        print("\n  中性化后统计:")
         neutralized_stats = pd.DataFrame(
             {
                 "mean": result.mean(),
@@ -133,7 +125,7 @@ def neutralize_factors(
         )
         print(neutralized_stats.head(10))
 
-        print("\n Step2!")
+        print("\nStep2完成!")
     else:
-        print(" : ")
+        print("  错误: 中性化结果为空")
         sys.exit(1)

@@ -48,11 +48,9 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 
 def main():
-    """"""
     args = parse_args()
     params = normalize_args(args)
 
-    # 执行GP因子挖掘
     from step5.genetic_algorithm_factor_mining import mine_factors_with_gp
 
     mine_factors_with_gp(
@@ -62,6 +60,8 @@ def main():
         end_date=params["end_date"],
         random_state=args.random_state,
     )
+
+    print("Step5完成! 缓存位置: .cache/")
 
 
 if __name__ == "__main__":

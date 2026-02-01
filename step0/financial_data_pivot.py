@@ -32,7 +32,14 @@ OUTPUT_ENCODING = "utf-8-sig"
 
 
 def normalize_exchange_code(code: str) -> str:
-    """"""
+    """将交易所前缀转换为大写。
+
+    Args:
+        code: 股票代码
+
+    Returns:
+        大写交易所前缀的股票代码
+    """
     if pd.isna(code):
         return code
     code_str = str(code).strip()
@@ -44,7 +51,14 @@ def normalize_exchange_code(code: str) -> str:
 
 
 def compute_period(report_dates: pd.Series) -> pd.Series:
-    """YYYYQ"""
+    """计算报告期季度编号（格式YYYYQ）。
+
+    Args:
+        report_dates: 报告日期Series
+
+    Returns:
+        季度编号Series（如20231表示2023年Q1）
+    """
     ts = pd.to_datetime(report_dates.astype(str), format="%Y%m%d", errors="coerce")
     quarter = ((ts.dt.month - 1) // 3 + 1).astype("Int64")
     return ts.dt.year.astype("Int64") * 100 + quarter
@@ -54,7 +68,15 @@ def pivot_to_long(
     df: pd.DataFrame,
     value_cols: Iterable[str],
 ) -> pd.DataFrame:
-    """field/value"""
+    """将宽表数据转换为长表格式（field/value结构）。
+
+    Args:
+        df: 宽格式的DataFrame
+        value_cols: 需要转换的值列名列表
+
+    Returns:
+        长格式的DataFrame，包含stock_code、date、period、field、value列
+    """
     melted = df.melt(
         id_vars=["stock_code", "date", "period"],
         value_vars=list(value_cols),
@@ -71,7 +93,14 @@ def pivot_to_long(
 
 
 def iter_csv_files(input_dir: Path) -> list[Path]:
-    """CSV"""
+    """遍历输入目录下的CSV文件。
+
+    Args:
+        input_dir: 输入路径（文件或目录）
+
+    Returns:
+        CSV文件路径列表
+    """
     if input_dir.is_file():
         return [input_dir]
     if input_dir.is_dir():
@@ -148,5 +177,4 @@ def process_financial_data(
                 out_path, index=False, encoding=OUTPUT_ENCODING
             )
 
-    print(" ")
-    print(f"   : {output_path}")
+    print(f"输出目录: {output_path}")

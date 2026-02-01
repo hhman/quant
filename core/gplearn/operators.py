@@ -84,25 +84,53 @@ def _create_talib_operator(
 
 @register_operator(name="abs", category="basic", arity=1)
 def op_abs(arr: np.ndarray) -> np.ndarray:
-    """"""
+    """计算绝对值。
+
+    Args:
+        arr: 输入数组
+
+    Returns:
+        绝对值数组
+    """
     return np.abs(arr)
 
 
 @register_operator(name="sqrt", category="basic", arity=1)
 def op_sqrt(arr: np.ndarray) -> np.ndarray:
-    """"""
+    """计算平方根（带数值稳定性处理）。
+
+    Args:
+        arr: 输入数组
+
+    Returns:
+        平方根数组
+    """
     return np.sqrt(np.abs(arr) + 1e-10)
 
 
 @register_operator(name="log", category="basic", arity=1)
 def op_log(arr: np.ndarray) -> np.ndarray:
-    """"""
+    """计算自然对数（带数值稳定性处理）。
+
+    Args:
+        arr: 输入数组
+
+    Returns:
+        对数值数组
+    """
     return np.log(np.abs(arr) + 1.0)
 
 
 @register_operator(name="sign", category="basic", arity=1)
 def op_sign(arr: np.ndarray) -> np.ndarray:
-    """"""
+    """计算符号函数。
+
+    Args:
+        arr: 输入数组
+
+    Returns:
+        符号数组（-1, 0, 1）
+    """
     return np.sign(arr)
 
 
@@ -112,28 +140,60 @@ def op_sign(arr: np.ndarray) -> np.ndarray:
 @register_operator(name="add", category="basic", arity=2)
 @with_boundary_check(window_size=None)
 def op_add(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
-    """"""
+    """数组加法。
+
+    Args:
+        arr1: 第一个数组
+        arr2: 第二个数组
+
+    Returns:
+        加法结果数组
+    """
     return arr1 + arr2
 
 
 @register_operator(name="sub", category="basic", arity=2)
 @with_boundary_check(window_size=None)
 def op_sub(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
-    """"""
+    """数组减法。
+
+    Args:
+        arr1: 第一个数组
+        arr2: 第二个数组
+
+    Returns:
+        减法结果数组
+    """
     return arr1 - arr2
 
 
 @register_operator(name="mul", category="basic", arity=2)
 @with_boundary_check(window_size=None)
 def op_mul(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
-    """"""
+    """数组乘法。
+
+    Args:
+        arr1: 第一个数组
+        arr2: 第二个数组
+
+    Returns:
+        乘法结果数组
+    """
     return arr1 * arr2
 
 
 @register_operator(name="div", category="basic", arity=2)
 @with_boundary_check(window_size=None)
 def op_div(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
-    """"""
+    """数组除法（带除零保护）。
+
+    Args:
+        arr1: 被除数数组
+        arr2: 除数数组
+
+    Returns:
+        除法结果数组
+    """
     return np.divide(arr1, arr2 + 1e-10)
 
 
@@ -388,14 +448,28 @@ if TALIB_AVAILABLE:
 @register_operator(name="rank", category="cross_sectional", arity=1)
 @with_panel_builder
 def cross_sectional_rank(panel: pd.DataFrame) -> pd.DataFrame:
-    """"""
+    """计算横截面排名。
+
+    Args:
+        panel: Panel格式数据
+
+    Returns:
+        排名百分比的DataFrame
+    """
     return panel.rank(axis=1, pct=True).fillna(0.5)
 
 
 @register_operator(name="zscore", category="cross_sectional", arity=1)
 @with_panel_builder
 def cross_sectional_zscore(panel: pd.DataFrame) -> pd.DataFrame:
-    """"""
+    """计算横截面Z-score标准化。
+
+    Args:
+        panel: Panel格式数据
+
+    Returns:
+        Z-score标准化后的DataFrame
+    """
     mean = panel.mean(axis=1)
     std = panel.std(axis=1)
     result = (panel.sub(mean, axis=0)).div(std, axis=0)

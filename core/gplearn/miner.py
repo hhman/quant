@@ -86,10 +86,7 @@ class FactorMiner:
         common_index = features_df.index.intersection(target_df.index)
 
         if len(common_index) == 0:
-            raise ValueError(" index")
-
-        if len(common_index) < len(features_df.index):
-            print(f"   {len(features_df.index) - len(common_index)} ")
+            raise ValueError("特征和目标变量索引无交集")
 
         features_filtered = features_df.loc[common_index]
         target_filtered = target_df.loc[common_index]
@@ -101,11 +98,7 @@ class FactorMiner:
         target_clean = target_filtered[valid_mask]
 
         if len(target_clean) == 0:
-            raise ValueError("")
-
-        dropped = len(valid_mask) - valid_mask.sum()
-        if dropped > 0:
-            print(f"   {dropped}  NaN  {len(target_clean)} ")
+            raise ValueError("有效数据为空")
 
         index = features_clean.index
 
@@ -122,7 +115,14 @@ class FactorMiner:
         index: pd.MultiIndex,
         boundaries: List[int],
     ) -> None:
-        """"""
+        """训练GP模型。
+
+        Args:
+            X: 特征数组
+            y: 目标数组
+            index: MultiIndex
+            boundaries: 边界索引列表
+        """
         transformer = self._setup_training_env(X, y, index, boundaries)
         self._execute_train(transformer, X, y)
         self._transformer = transformer
@@ -176,26 +176,26 @@ class FactorMiner:
         X: np.ndarray,
         y: np.ndarray,
     ) -> None:
-        """
-
+        """执行GP训练。
 
         Args:
             transformer: SymbolicTransformer
-            X:
-            y:
+            X: 特征数组
+            y: 目标数组
         """
-        params = transformer.get_params()
-        print(
-            f"  : population={params['population_size']}, "
-            f"generations={params['generations']}, "
-            f"n_jobs={params['n_jobs']}"
-        )
         transformer.fit(X, y)
 
     def _export(self) -> List[str]:
-        """"""
+        """导出GP生成的表达式。
+
+        Returns:
+            表达式字符串列表
+
+        Raises:
+            RuntimeError: 当模型未训练时
+        """
         if self._transformer is None:
-            raise RuntimeError("")
+            raise RuntimeError("模型尚未训练，请先调用run方法")
 
         expressions = []
         for program_list in self._transformer._programs:

@@ -83,7 +83,6 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 
 def main():
-    """Step 4主函数：执行因子绩效评估流程。"""
     args = parse_args()
 
     params = normalize_args(args)
@@ -92,8 +91,7 @@ def main():
 
     evaluate_performance(**params)
 
-    print("\n[完成] Step 4 执行完成!")
-    print("   缓存位置: .cache/")
+    print("Step4完成! 缓存位置: .cache/")
 
 
 if __name__ == "__main__":
