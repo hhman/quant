@@ -57,7 +57,10 @@ conda activate quant && python step0/cli.py \
 
 **验证**:
 ```bash
-ls -d .cache/qlib_data && echo "✅ 通过" || echo "❌ 失败"
+ls -d .cache/qlib_data && \
+ls .cache/all__returns.parquet && \
+ls .cache/all__styles.parquet && \
+echo "✅ 通过" || echo "❌ 失败"
 ```
 
 ## Test 2: Step1 因子提取
@@ -75,8 +78,6 @@ conda activate quant && python step1/cli.py \
 ```bash
 ls .cache/csi300_20230101_20240101__factor_raw.parquet && \
 ls .cache/csi300_20230101_20240101__factor_std.parquet && \
-ls .cache/all_20230101_20240101__returns.parquet && \
-ls .cache/all_20230101_20240101__styles.parquet && \
 echo "✅ 通过" || echo "❌ 失败"
 ```
 
@@ -146,52 +147,7 @@ echo "✅ 通过" || echo "❌ 失败"
 
 ## Test 6: Cache机制验证
 
-### 场景1: 跨市场复用收益率数据
-
-**目的**: 验证不同市场复用 all 市场的 returns 和 styles 文件
-
-**命令与验证**:
-```bash
-# 1. 记录执行前的文件时间戳
-RETURNS_BEFORE=$(stat -f "%m" .cache/all_20230101_20240101__returns.parquet 2>/dev/null || echo "0")
-STYLES_BEFORE=$(stat -f "%m" .cache/all_20230101_20240101__styles.parquet 2>/dev/null || echo "0")
-echo "执行前时间戳:"
-echo "  returns: $RETURNS_BEFORE"
-echo "  styles: $STYLES_BEFORE"
-
-# 2. 执行 sse50 市场（不同市场）
-echo ""
-echo "执行 sse50 市场..."
-conda activate quant && python step1/cli.py \
-  --market sse50 \
-  --start-date 2023-01-01 \
-  --end-date 2024-01-01 \
-  --factor-formulas "Ref(\$close,60)/\$close" 2>&1 | grep -E "(复用|收益率|风格数据|保存)"
-
-# 3. 记录执行后的文件时间戳
-RETURNS_AFTER=$(stat -f "%m" .cache/all_20230101_20240101__returns.parquet 2>/dev/null || echo "0")
-STYLES_AFTER=$(stat -f "%m" .cache/all_20230101_20240101__styles.parquet 2>/dev/null || echo "0")
-echo ""
-echo "执行后时间戳:"
-echo "  returns: $RETURNS_AFTER"
-echo "  styles: $STYLES_AFTER"
-
-# 4. 验证：文件时间戳应该不变（说明复用了cache）
-echo ""
-if [ "$RETURNS_BEFORE" = "$RETURNS_AFTER" ] && [ "$STYLES_BEFORE" = "$STYLES_AFTER" ]; then
-  echo "✅ 通过：returns和styles文件复用成功（时间戳未变化）"
-else
-  echo "❌ 失败：文件时间戳发生变化，可能未正确复用cache"
-fi
-```
-
-**预期**:
-- 日志包含"复用all市场收益率数据"或"复用all市场风格数据"
-- 文件时间戳执行前后保持不变（说明复用了已有文件）
-
----
-
-### 场景2: 智能追加新因子
+### 场景1: 智能追加新因子
 
 **目的**: 验证向已有文件追加新因子的功能
 
@@ -208,7 +164,7 @@ conda activate quant && python step1/cli.py \
   --market csi300 \
   --start-date 2023-01-01 \
   --end-date 2024-01-01 \
-  --factor-formulas "Mean(\$volume,20)" 2>&1 | grep -E "(追加|因子)"
+  --factor-formulas "Mean(\$volume,20)" 2>&1 | grep -E "(新增|因子)"
 
 # 3. 检查追加后的因子列数和列名
 AFTER_COUNT=$(python -c "import pandas as pd; df = pd.read_parquet('.cache/csi300_20230101_20240101__factor_std.parquet'); print(df.shape[1])")
@@ -227,20 +183,20 @@ fi
 ```
 
 **预期**:
-- 日志包含"追加新因子 (1个)"
+- 日志包含"新增列"
 - 执行前1列，执行后2列
 - 因子列包含 `Ref($close,60)/$close` 和 `Mean($volume,20)`
 
 ---
 
-### 场景3: 智能替换已存在因子
+### 场景2: 智能替换已存在因子
 
 **目的**: 验证重新计算已存在因子的功能
 
 **命令与验证**:
 ```bash
 # 1. 记录执行前的文件时间戳和列数
-BEFORE_TS=$(stat -f "%m" .cache/csi300_20230101_20240101__factor_std.parquet)
+BEFORE_TS=$(python -c "import pathlib; print(int(pathlib.Path('.cache/csi300_20230101_20240101__factor_std.parquet').stat().st_mtime))")
 BEFORE_COUNT=$(python -c "import pandas as pd; df = pd.read_parquet('.cache/csi300_20230101_20240101__factor_std.parquet'); print(df.shape[1])")
 echo "执行前时间戳: $BEFORE_TS"
 echo "执行前列数: $BEFORE_COUNT"
@@ -252,11 +208,11 @@ conda activate quant && python step1/cli.py \
   --market csi300 \
   --start-date 2023-01-01 \
   --end-date 2024-01-01 \
-  --factor-formulas "Mean(\$volume,20)" 2>&1 | grep -E "(更新|替换|因子)"
+  --factor-formulas "Mean(\$volume,20)" 2>&1 | grep -E "(替换|因子)"
 
 # 3. 等待1秒后记录执行后的时间戳和列数
 sleep 1
-AFTER_TS=$(stat -f "%m" .cache/csi300_20230101_20240101__factor_std.parquet)
+AFTER_TS=$(python -c "import pathlib; print(int(pathlib.Path('.cache/csi300_20230101_20240101__factor_std.parquet').stat().st_mtime))")
 AFTER_COUNT=$(python -c "import pandas as pd; df = pd.read_parquet('.cache/csi300_20230101_20240101__factor_std.parquet'); print(df.shape[1])")
 echo ""
 echo "执行后时间戳: $AFTER_TS"
@@ -272,7 +228,7 @@ fi
 ```
 
 **预期**:
-- 日志包含"更新已有因子 (1个): Mean($volume,20)"
+- 日志包含"替换列"
 - 文件时间戳更新
 - 因子列数保持不变（仍为2）
 
@@ -280,17 +236,46 @@ fi
 
 ## Test 7: 错误检测验证
 
-### 场景1: 不存在的日期范围（无cache数据）
+### 场景1: 日期范围子集读取（正常情况）
 
-**目的**: 验证当请求的日期范围没有对应cache时，系统是否报错
+**目的**: 验证当请求的日期范围是缓存数据的子集时，系统正常读取
 
 **命令与验证**:
 ```bash
-echo "测试不存在的日期范围..."
+echo "测试日期范围子集读取（2023-06-01 ~ 2023-12-31）..."
 echo ""
 
-# 执行命令并捕获输出
-OUTPUT=$(conda activate quant && python step2/cli.py \
+# 执行命令（请求缓存范围 2023-01-01 ~ 2024-01-01 的子集）
+conda activate quant && python step1/cli.py \
+  --market csi300 \
+  --start-date 2023-06-01 \
+  --end-date 2023-12-31 \
+  --factor-formulas "Ref(\$close,60)/\$close" 2>&1 | tail -20
+
+echo ""
+# 验证：检查输出文件是否存在
+if ls .cache/csi300_20230601_20231231__factor_std.parquet 2>/dev/null; then
+  echo "✅ 通过：子集日期范围正常处理"
+else
+  echo "❌ 失败：未生成预期输出文件"
+fi
+```
+
+**预期**: 命令成功（退出码0），生成 factor_std.parquet 文件
+
+---
+
+### 场景2: returns/styles 日期范围不足（错误情况）
+
+**目的**: 验证当请求 returns/styles 时日期范围超出缓存，系统报错
+
+**命令与验证**:
+```bash
+echo "测试 returns/styles 日期范围超出缓存..."
+echo ""
+
+# 执行命令并捕获输出（请求 2022 年数据，但缓存只有 2023-2024）
+OUTPUT=$(conda activate quant && python step1/cli.py \
   --market csi300 \
   --start-date 2022-01-01 \
   --end-date 2022-12-31 \
@@ -301,18 +286,18 @@ echo "$OUTPUT" | head -20
 echo ""
 
 # 验证：检查错误信息关键词
-if echo "$OUTPUT" | grep -q "Cache 文件不存在"; then
-  echo "✅ 通过：正确检测到cache不存在的错误"
+if echo "$OUTPUT" | grep -q "日期范围不足"; then
+  echo "✅ 通过：正确检测到日期范围不足的错误"
 else
   echo "❌ 失败：未检测到预期错误"
 fi
 ```
 
-**预期**: 命令失败（退出码非0），错误信息包含"Cache 文件不存在"
+**预期**: 命令失败（退出码非0），错误信息包含"日期范围不足"
 
 ---
 
-### 场景2: 不存在的因子
+### 场景3: 不存在的因子
 
 **目的**: 验证请求的因子在cache中不存在时的错误处理
 
@@ -333,14 +318,14 @@ echo "$OUTPUT" | head -20
 echo ""
 
 # 验证：检查错误信息关键词
-if echo "$OUTPUT" | grep -q -E "(不在cache中|不存在|未找到)"; then
+if echo "$OUTPUT" | grep -q "请求的列不存在"; then
   echo "✅ 通过：正确检测到因子不存在的错误"
 else
   echo "❌ 失败：未检测到预期错误"
 fi
 ```
 
-**预期**: 命令失败，错误信息包含"不在cache中"或"不存在"
+**预期**: 命令失败，错误信息包含"请求的列不存在"
 
 ## 预期测试时间
 

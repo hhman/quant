@@ -30,7 +30,8 @@
 ## 依赖关系
 
 **前置依赖**:
+- Step0生成的 `qlib_data/`
+- Step0生成的 `all__styles.parquet`
 - Step1生成的 `factor_std.parquet`
-- Step1生成的 `styles.parquet`
 
 **被依赖**: Step4依赖 `neutralized.parquet`

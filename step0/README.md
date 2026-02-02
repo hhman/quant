@@ -16,8 +16,11 @@
 │   ├── instruments/         # 指数成分股文件 (TXT)
 │   ├── financial/           # 透视后的财务数据 (CSV)
 │   └── industry_mapping.json # 行业名称映射
-└── qlib_data/               # Qlib二进制数据 (持久)
-    └── instruments/         # 成分股文件
+├── qlib_data/               # Qlib二进制数据 (持久)
+│   └── instruments/         # 成分股文件
+├── industry_mapping.json    # 行业名称映射 (跨市场复用)
+├── all__styles.parquet      # 风格变量 (全市场，固定文件名)
+└── all__returns.parquet     # 未来收益率 (全市场，固定文件名)
 ```
 
 ### 文件说明
@@ -33,8 +36,21 @@
 **financial/*.csv** - 财务数据 (PIT长表格式)
 - 列: `stock_code`, `date`, `period`, `field`, `value`
 
+**styles.parquet** - 风格变量
+- 索引: MultiIndex (`instrument`, `datetime`)
+- 列: `$total_mv`, `$industry`, `$float_mv`
+
+**returns.parquet** - 未来收益率
+- 索引: MultiIndex (`instrument`, `datetime`)
+- 列: `ret_1d`, `ret_1w`, `ret_1m`
+
 ## 依赖关系
 
 **前置依赖**: 无
 
-**被依赖**: Step1依赖Step0生成的 `qlib_data/`
+**被依赖**:
+- Step1依赖 `qlib_data/`
+- Step2依赖 `styles.parquet`
+- Step3依赖 `returns.parquet`, `styles.parquet`
+- Step4依赖 `returns.parquet`
+- Step5依赖 `returns.parquet`

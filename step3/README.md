@@ -5,9 +5,9 @@
 | 参数 | 类型 | 默认值 | 必需 | 说明 |
 |------|------|--------|------|------|
 | `--market` | str | "csi300" | 否 | 市场标识 (必须与Step1一致) |
-| `--start-date` | str | None | **是** | 起始日期 (必须与Step1一致) |
-| `--end-date` | str | None | **是** | 结束日期 (必须与Step1一致) |
-| `--factor-formulas` | str | None | **是** | 因子表达式列表 (必须是Step1因子的子集) |
+| `--start-date` | str | - | **是** | 起始日期 (必须与Step1一致) |
+| `--end-date` | str | - | **是** | 结束日期 (必须与Step1一致) |
+| `--factor-formulas` | str | - | **是** | 因子表达式列表 (必须是Step1因子的子集) |
 
 ### 参数约束
 - `market`, `start_date`, `end_date` 必须与Step1完全一致
@@ -44,6 +44,9 @@
 ## 依赖关系
 
 **前置依赖**:
+- Step0生成的 `qlib_data/`
+- Step0生成的 `all__returns.parquet`
+- Step0生成的 `all__styles.parquet`
 - Step1生成的 `factor_std.parquet`
-- Step1生成的 `returns.parquet`
-- Step1生成的 `styles.parquet`
+
+**被依赖**: 无

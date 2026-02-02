@@ -130,6 +130,12 @@ def main():
         output_dir=str(output_dir),
     )
 
+    if qlib_dir.exists():
+        import shutil
+
+        shutil.rmtree(qlib_dir)
+        print(f"删除旧数据: {qlib_dir}")
+
     run_command(
         f'python "{qlib_src_dir}/scripts/dump_bin.py" dump_all '
         f'--data_path "{output_dir}" '
@@ -151,6 +157,14 @@ def main():
     for txt_file in txt_files:
         dst_file = instruments_dst / txt_file.name
         run_command(f'cp "{txt_file}" "{dst_file}"', description="复制membership文件")
+
+    industry_mapping_src = output_dir / "industry_mapping.json"
+    industry_mapping_dst = Path(cache_dir) / "industry_mapping.json"
+    if industry_mapping_src.exists():
+        run_command(
+            f'cp "{industry_mapping_src}" "{industry_mapping_dst}"',
+            description="复制industry_mapping文件",
+        )
 
     from step0.财务数据透视 import process_financial_data
 
@@ -179,6 +193,14 @@ def main():
         f'python "{qlib_src_dir}/scripts/check_data_health.py" check_data '
         f'--qlib_dir "{qlib_dir}"',
         description="数据质量校验 (check_data_health)",
+    )
+
+    from step0.returns_and_styles import calculate_returns_and_styles
+
+    calculate_returns_and_styles(
+        start_date=params["start_date"],
+        end_date=params["end_date"],
+        provider_uri=str(qlib_dir),
     )
 
     print("Step0完成!")
