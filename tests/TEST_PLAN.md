@@ -275,7 +275,7 @@ echo "测试 returns/styles 日期范围超出缓存..."
 echo ""
 
 # 执行命令并捕获输出（请求 2022 年数据，但缓存只有 2023-2024）
-OUTPUT=$(conda activate quant && python step1/cli.py \
+OUTPUT=$(conda activate quant && python step2/cli.py \
   --market csi300 \
   --start-date 2022-01-01 \
   --end-date 2022-12-31 \
@@ -318,14 +318,14 @@ echo "$OUTPUT" | head -20
 echo ""
 
 # 验证：检查错误信息关键词
-if echo "$OUTPUT" | grep -q "请求的列不存在"; then
+if echo "$OUTPUT" | grep -q "未找到因子"; then
   echo "✅ 通过：正确检测到因子不存在的错误"
 else
   echo "❌ 失败：未检测到预期错误"
 fi
 ```
 
-**预期**: 命令失败，错误信息包含"请求的列不存在"
+**预期**: 命令失败，错误信息包含"未找到因子"
 
 ## 预期测试时间
 
