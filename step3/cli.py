@@ -87,7 +87,7 @@ def main():
 
     params = normalize_args(args)
 
-    from step3.returns_engine import calculate_returns
+    from step3.factor_return_calculation import calculate_returns
 
     calculate_returns(**params)
 

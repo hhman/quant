@@ -87,7 +87,7 @@ def main():
 
     params = normalize_args(args)
 
-    from step4.evaluation import evaluate_performance
+    from step4.factor_performance_evaluation import evaluate_performance
 
     evaluate_performance(**params)
 
