@@ -87,7 +87,7 @@ def main():
 
     params = normalize_args(args)
 
-    from step2.neutralization import neutralize_factors
+    from step2.factor_neutralization import neutralize_factors
 
     neutralize_factors(**params)
 
