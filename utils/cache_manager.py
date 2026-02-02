@@ -227,7 +227,7 @@ class CacheManager:
             data_type: 数据类型
 
         Raises:
-            ValueError: 日期范围不足
+            ValueError: 日期范围严重不足（超过7天容差）
         """
         df = pd.read_parquet(path)
         if df.index.empty:
@@ -238,7 +238,10 @@ class CacheManager:
         requested_start = pd.Timestamp(self.start_date)
         requested_end = pd.Timestamp(self.end_date)
 
-        if actual_start > requested_start or actual_end < requested_end:
+        start_gap = (actual_start - requested_start).days
+        end_gap = (requested_end - actual_end).days
+
+        if start_gap > 7 or end_gap > 7:
             data_name = "收益率" if data_type == "returns" else "风格因子"
             raise ValueError(
                 f"{data_name}日期范围不足:\n"
