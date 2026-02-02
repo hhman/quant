@@ -120,7 +120,7 @@ def main():
 
     validate_input_directories()
 
-    from step0.日线数据清洗 import process_stock_data
+    from step0.daily_data_cleaning import process_stock_data
 
     process_stock_data(
         start_date=params["start_date"],
@@ -166,7 +166,7 @@ def main():
             description="复制industry_mapping文件",
         )
 
-    from step0.财务数据透视 import process_financial_data
+    from step0.financial_data_pivot import process_financial_data
 
     process_financial_data(
         start_date=params["start_date"],
