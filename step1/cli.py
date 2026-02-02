@@ -87,7 +87,7 @@ def main():
 
     params = normalize_args(args)
 
-    from step1.factor_engine import calculate_factors
+    from step1.factor_extraction_preprocessing import calculate_factors
 
     calculate_factors(**params)
 
