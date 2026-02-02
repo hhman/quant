@@ -30,16 +30,27 @@ rm -rf .cache/
 
 ## 测试依赖关系
 
-```
-Test 1 (Step0)
-   ↓
-Test 2 (Step1) ←────────┐
-   ↓                     │
-Test 3 (Step2)           │ Test 6 (Cache机制)
-   ↓                     │
-Test 4 (Step3) ←─────────┤
-   ↓                     │
-Test 5 (Step4)           │ Test 7 (错误检测)
+```mermaid
+graph TB
+    T1["Test 1: Step0"]
+    T2["Test 2: Step1"]
+    T3["Test 3: Step2"]
+    T4["Test 4: Step3"]
+    T5["Test 5: Step4"]
+    T6["Test 6: Cache机制"]
+    T7["Test 7: 错误检测"]
+
+    T1 --> T2 --> T3 --> T4 --> T5
+    T2 -.-> T6
+    T2 -.-> T7
+
+    style T1 fill:#fff9c4
+    style T2 fill:#c8e6c9
+    style T3 fill:#c8e6c9
+    style T4 fill:#c8e6c9
+    style T5 fill:#c8e6c9
+    style T6 fill:#ffccbc
+    style T7 fill:#ffccbc
 ```
 
 ## 错误处理原则
