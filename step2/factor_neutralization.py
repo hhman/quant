@@ -12,7 +12,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-import numpy as np
 
 from utils.cache_manager import CacheManager
 from core.factor_analysis import neutralize_industry_marketcap
@@ -106,24 +105,6 @@ def neutralize_factors(
         )
         cache_mgr.write_dataframe(result, "neutralized")
         print(f"    neutralized: {result.shape}")
-
-        print("\n  中性化效果检查:")
-        merged = result.join(styles_df[["$total_mv"]])
-        for factor_col in result.columns:
-            corr = merged[factor_col].corr(np.log(merged["$total_mv"]))
-            print(f"    {factor_col} vs log(总市值): {corr:.4f}")
-
-        print("\n  中性化后统计:")
-        neutralized_stats = pd.DataFrame(
-            {
-                "mean": result.mean(),
-                "std": result.std(),
-                "min": result.min(),
-                "max": result.max(),
-                "na_ratio": result.isna().mean(),
-            }
-        )
-        print(neutralized_stats.head(10))
 
         print("\nStep2完成!")
     else:
