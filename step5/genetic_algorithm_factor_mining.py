@@ -14,7 +14,7 @@ from qlib.constant import REG_CN
 from qlib.data import D
 
 from core.gplearn import FactorMiner
-from core.gplearn.config import DEFAULT_FEATURES, DEFAULT_TARGET, GPConfig
+from core.gplearn.config import DEFAULT_FEATURES, DEFAULT_TARGET, get_fast_test_config
 from utils.cache_manager import CacheManager
 
 
@@ -91,7 +91,7 @@ def mine_factors_with_gp(
     miner = FactorMiner(
         features=DEFAULT_FEATURES,
         target=DEFAULT_TARGET,
-        gp_config=GPConfig(),
+        gp_config=get_fast_test_config(),
         random_state=random_state,
     )
 

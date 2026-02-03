@@ -112,24 +112,6 @@ class GPConfig:
 # ==================== 配置工厂函数 ====================
 
 
-def get_default_data_config() -> DataConfig:
-    """获取默认数据配置。
-
-    Returns:
-        默认数据配置对象
-    """
-    return DataConfig()
-
-
-def get_default_gp_config() -> GPConfig:
-    """获取默认GP配置。
-
-    Returns:
-        默认GP配置对象
-    """
-    return GPConfig()
-
-
 def get_fast_test_config() -> GPConfig:
     """获取快速测试配置（用于调试和测试）。
 
@@ -140,8 +122,25 @@ def get_fast_test_config() -> GPConfig:
         population_size=20,
         generations=2,
         hall_of_fame=5,
-        n_components=2,
+        n_components=3,
         tournament_size=3,
+    )
+
+
+def get_production_config() -> GPConfig:
+    """获取生产级配置（用于正式因子挖掘）。
+
+    最大化探索能力，适合最终因子挖掘，计算时间较长。
+
+    Returns:
+        生产级配置对象
+    """
+    return GPConfig(
+        population_size=500,
+        generations=20,
+        hall_of_fame=20,
+        n_components=10,
+        tournament_size=10,
     )
 
 
@@ -155,7 +154,6 @@ __all__ = [
     "DEFAULT_FEATURES",
     "DEFAULT_TARGET",
     # 工厂函数
-    "get_default_data_config",
-    "get_default_gp_config",
     "get_fast_test_config",
+    "get_production_config",
 ]

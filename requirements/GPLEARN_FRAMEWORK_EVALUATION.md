@@ -96,7 +96,6 @@ core/gplearn/ (改进层，可修改)
 
 **保留的核心问题**（仍需解决）:
 - 适应度函数单一 (P0)
-- GP 参数过小 (P1)
 - 全局变量并发安全未验证 (P2)
 
 **已解决的问题**:
@@ -104,6 +103,7 @@ core/gplearn/ (改进层，可修改)
 - ✅ 数据清洗粗糙 (P0) → 职责分离 + join 对齐 + NaN 检测
 - ✅ 缺乏后验分析 (P0) → 通过 Step1-4 复用解决
 - ✅ 算子库不足 (P1) → 已完成 TA-Lib 集成
+- ✅ GP 参数过小 (P1) → 添加两档配置（test/production）
 
 ---
 
@@ -246,30 +246,36 @@ def rank_ir_fitness(y_true_panel, y_pred_panel):
 
 ### P1 级别（算法能力 - 应该解决）
 
-#### 问题4：GP 参数过小（严重程度：中）
+#### 问题4：GP 参数过小（严重程度：中）✅ 已解决
 
-**位置**: [core/gplearn/config.py:85-102](../core/gplearn/config.py)
+**位置**: [core/gplearn/config.py:127-156](../core/gplearn/config.py)
 
-**现状**:
+**解决时间**: 2026-02-03
+
+**解决方案**: 添加两档配置函数
+
 ```python
-population_size: int = 20       # 种群太小
-generations: int = 2            # 迭代太少
-n_components: int = 3           # 输出因子太少
+# 测试配置（默认，step5 使用）
+get_fast_test_config():
+    population_size=20, generations=2, n_components=3
+
+# 生产配置（手动切换）
+get_production_config():
+    population_size=500, generations=20, n_components=10
 ```
 
-**问题**:
-- 探索能力严重不足（20×2×4=160 个表达式 vs 建议 500×20×6=60,000）
-- 早熟收敛，停留在局部最优
-- 因子数量太少，无法分散风险
-
-**解决方案**: 修改 config.py
+**使用方式**:
 ```python
-population_size: int = 500       # 20 → 500
-generations: int = 20            # 2 → 20
-n_components: int = 10           # 3 → 10
+# step5 默认使用测试配置
+from core.gplearn.config import get_fast_test_config
+miner = FactorMiner(..., gp_config=get_fast_test_config())
+
+# 切换到生产配置时修改 step5 导入
+from core.gplearn.config import get_production_config
+miner = FactorMiner(..., gp_config=get_production_config())
 ```
 
-**工作量**: 0.5 天
+**工作量**: 已完成
 
 ---
 
