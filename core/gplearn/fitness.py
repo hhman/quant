@@ -13,16 +13,20 @@ from .common.decorators import with_panel_convert
 # ====================  ====================
 
 
-@register_fitness(name="rank_ic")
+@register_fitness(name="rank_ic", stopping_criteria=0.03)
 @with_panel_convert(min_samples=100)
 def rank_ic_fitness(
     y_true_panel: pd.DataFrame,
     y_pred_panel: pd.DataFrame,
 ) -> float:
-    """
-    Rank IC
+    """Rank IC 适应度函数。
 
-     Spearman
+    Args:
+        y_true_panel: 真实值面板，形状为 (n_dates, n_instruments)
+        y_pred_panel: 预测值面板，形状为 (n_dates, n_instruments)
+
+    Returns:
+        加权平均 Rank IC，范围 [-1, 1]
     """
     ic_series = y_pred_panel.corrwith(y_true_panel, axis=1, method="spearman")
 

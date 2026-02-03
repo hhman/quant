@@ -137,17 +137,29 @@ class FactorMiner:
         self,
         function_set: List,
     ) -> SymbolicTransformer:
-        """
-         SymbolicTransformer
+        """创建 SymbolicTransformer。
 
         Args:
-            function_set:
+            function_set: 算子集合
 
         Returns:
-            SymbolicTransformer
+            SymbolicTransformer 实例
         """
+        from gplearn.fitness import make_fitness
+        from .common.registry import _get_fitness_raw, _get_fitness_meta
+
         params = self.gp_config.to_dict()
         params["random_state"] = self.random_state
+
+        metric_name = params.pop("metric", "rank_ic")
+
+        meta = _get_fitness_meta(metric_name)
+        stopping_criteria = meta.get("stopping_criteria", 0.0)
+        params["stopping_criteria"] = stopping_criteria
+
+        fitness_func = _get_fitness_raw(metric_name)
+        custom_metric = make_fitness(function=fitness_func, greater_is_better=True)
+        params["metric"] = custom_metric
 
         return SymbolicTransformer(
             function_set=function_set, feature_names=self.features, **params

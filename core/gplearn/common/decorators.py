@@ -186,13 +186,6 @@ def with_panel_convert(
 
     Returns:
         装饰器函数
-
-    Example:
-        @register_fitness(name="rank_ic")
-        @with_panel_convert(min_samples=100)
-        def rank_ic_fitness(y_true_panel, y_pred_panel):
-            ic_series = y_pred_panel.corrwith(y_true_panel, axis=1)
-            return ic_series.mean()
     """
 
     def decorator(func: Callable) -> Callable:
@@ -205,35 +198,33 @@ def with_panel_convert(
             包装后的函数
         """
 
-        @wraps(func)
         def wrapper(
-            y_true: np.ndarray,
+            y: np.ndarray,
             y_pred: np.ndarray,
-            index: pd.MultiIndex = None,
-            boundary_indices: list = None,
-            **kwargs,
+            w: np.ndarray,
         ) -> float:
-            """包装器函数，将数组转换为面板数据后调用原函数。
+            """Gplearn metric 兼容的包装器。
 
             Args:
-                y_true: 真实值数组
+                y: 真实值数组
                 y_pred: 预测值数组
-                index: 多重索引，如果为None则从全局状态获取
-                boundary_indices: 边界索引列表（未使用）
-                **kwargs: 其他关键字参数
+                w: 样本权重（不使用）
 
             Returns:
-                适应度函数的计算结果
+                适应度值
             """
-            if index is None:
-                index = get_index()
+            index = get_index()
 
-            y_true_panel, y_pred_panel = build_dual_panel(y_true, y_pred, index)
+            y_true_panel, y_pred_panel = build_dual_panel(y, y_pred, index)
             y_true_panel, y_pred_panel = _clean_dual_panel(
                 y_true_panel, y_pred_panel, min_samples, clean_axis
             )
 
-            return func(y_true_panel, y_pred_panel, **kwargs)
+            return func(y_true_panel, y_pred_panel)
+
+        wrapper.__name__ = func.__name__
+        wrapper.__doc__ = func.__doc__
+        wrapper.__module__ = func.__module__
 
         return wrapper
 

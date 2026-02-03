@@ -343,67 +343,84 @@ panel = df['value'].unstack(level=0)
 
 ---
 
-## 适应度函数与双面板机制
+## 适应度函数与 Gplearn 集成
 
-### 问题：适应度函数需要同时访问 y_true 和 y_pred
+### 适配层架构
 
-**Gplearn 的限制**：适应度函数签名固定为 `func(y_true, y_pred)`
+**问题**：Gplearn 要求 metric 签名为 `func(y, y_pred, w)`，但面板计算需要 `(y_true_panel, y_pred_panel)`
 
-**需求**：计算 Rank IC（需要横截面相关性）
+**解决方案**：`@with_panel_convert` 装饰器完成三层适配
+1. 签名适配：`(y, y_pred, w)` → 满足 gplearn 要求
+2. 数据适配：扁平数组 → Panel DataFrame
+3. 生命周期管理：通过全局状态获取 index
+
+### 注册机制
+
+**实现位置**：`core/gplearn/common/registry.py:185-199`
 
 ```python
-def rank_ic(y_true, y_pred):
-    # 需要将 y_true 和 y_pred 都转换为面板
-    # 然后计算每天的横截面相关性
-    pass
-```
-
-### 解决方案：双面板转换装饰器
-
-**实现位置**：`core/gplearn/common/decorators.py:58-101`
-
-装饰器处理流程：
-1. 获取 MultiIndex（从参数或全局状态）
-2. 调用 `build_dual_panel()` 同时构建 y_true 和 y_pred 的面板数据
-3. 清洗面板数据（删除全 NaN 列）
-4. 调用适应度函数处理双面板数据
-
-### build_dual_panel 实现
-
-**实现位置**：`core/gplearn/common/panel.py:76-95`
-
-函数功能：
-- 将 y_true 和 y_pred 合并为单个 DataFrame（共享 MultiIndex）
-- 同时对两个序列执行 `unstack(level=0)` 操作
-- 返回两个面板数据（形状为 `(n_dates, n_instruments)`）
-
-### 使用示例：Rank IC 适应度函数
-
-**函数签名**：
-```python
-@register_fitness(name="rank_ic")
+@register_fitness(name="rank_ic", stopping_criteria=0.03)
 @with_panel_convert(min_samples=100)
-def rank_ic_fitness(y_true_panel: pd.DataFrame, y_pred_panel: pd.DataFrame):
-    ...
+def rank_ic_fitness(y_true_panel, y_pred_panel) -> float:
+    """Rank IC 适应度函数。
+
+    Args:
+        y_true_panel: 真实值面板，形状为 (n_dates, n_instruments)
+        y_pred_panel: 预测值面板，形状为 (n_dates, n_instruments)
+
+    Returns:
+        加权平均 Rank IC，范围 [-1, 1]
+    """
+    ic_series = y_pred_panel.corrwith(y_true_panel, axis=1, method="spearman")
+    n_samples_per_date = y_pred_panel.notna().sum(axis=1)
+    ic_mean = (ic_series * n_samples_per_date).sum() / n_samples_per_date.sum()
+    return ic_mean
 ```
 
-**功能说明**：
-- 计算每天的横截面相关性（Spearman 相关系数）
-- 返回平均 Rank IC 作为适应度值
+**stopping_criteria 绑定**：
+- 注册时指定 `stopping_criteria=0.03`（IC ≥ 3% 时早停）
+- 存储到 fitness 元数据
+- `FactorMiner` 自动从元数据读取并传递给 gplearn
 
-**数据流**：
+### Gplearn 集成
+
+**实现位置**：`core/gplearn/miner.py:136-168`
+
 ```python
-# 输入（展平）
-y_true = [0.01, -0.02, 0.03, ...]  # (n_samples,)
-y_pred = [0.5, -0.3, 0.8, ...]     # (n_samples,)
+def _create_transformer(self, function_set):
+    from gplearn.fitness import make_fitness
+    from .common.registry import _get_fitness_raw, _get_fitness_meta
 
-# with_panel_convert 转换
-y_true_panel =  # (n_dates, n_instruments)
-y_pred_panel =  # (n_dates, n_instruments)
+    params = self.gp_config.to_dict()
+    metric_name = params.pop("metric", "rank_ic")
 
-# rank_ic_fitness 计算
-# → 每天：corr(y_true_panel[date], y_pred_panel[date])
-# → 均值：mean(IC)
+    # 从元数据获取 stopping_criteria
+    meta = _get_fitness_meta(metric_name)
+    stopping_criteria = meta.get("stopping_criteria", 0.0)
+    params["stopping_criteria"] = stopping_criteria
+
+    # 创建 gplearn 兼容的 metric
+    fitness_func = _get_fitness_raw(metric_name)
+    custom_metric = make_fitness(function=fitness_func, greater_is_better=True)
+    params["metric"] = custom_metric
+
+    return SymbolicTransformer(...)
+```
+
+### 数据流
+
+```
+Gplearn 调用: metric(y, y_pred, w)
+    ↓
+@with_panel_convert wrapper
+    ↓ (从全局状态获取 index)
+build_dual_panel(y, y_pred, index)
+    ↓
+y_true_panel, y_pred_panel (n_dates, n_instruments)
+    ↓
+rank_ic_fitness(y_true_panel, y_pred_panel)
+    ↓
+返回 IC 均值
 ```
 
 ---

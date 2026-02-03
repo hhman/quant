@@ -59,7 +59,7 @@ class GPConfig:
         n_jobs: 并行任务数
         verbose: 详细输出级别
         random_state: 随机种子
-        stopping_criteria: 停止标准（适应度阈值）
+        metric: 适应度函数名称（从注册表获取 stopping_criteria）
     """
 
     population_size: int = 20
@@ -79,7 +79,7 @@ class GPConfig:
     n_jobs: int = 4
     verbose: int = 1
     random_state: int = None
-    stopping_criteria: float = 0.0
+    metric: str = "rank_ic"
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式，用于传递给SymbolicTransformer。
@@ -105,7 +105,6 @@ class GPConfig:
             "n_jobs": self.n_jobs,
             "verbose": self.verbose,
             "random_state": self.random_state,
-            "stopping_criteria": self.stopping_criteria,
         }
 
 

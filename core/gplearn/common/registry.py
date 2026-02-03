@@ -182,17 +182,20 @@ def _get_operator_meta(name: str) -> Dict[str, Any]:
 # ==================== 适应度函数注册接口 ====================
 
 
-def register_fitness(name: str, **meta) -> Callable:
+def register_fitness(name: str, stopping_criteria: float = None, **meta) -> Callable:
     """注册适应度函数。
 
     Args:
         name: 函数名称
+        stopping_criteria: 推荐的早停阈值（与 fitness 返回值同量纲）
         **meta: 其他元数据
 
     Returns:
         装饰器函数
     """
     registry = _get_fitness_registry()
+    if stopping_criteria is not None:
+        meta["stopping_criteria"] = stopping_criteria
     return register(registry, name, **meta)
 
 
