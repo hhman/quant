@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-Step5:
- Gplearn  SymbolicTransformer
+"""Step5: 遗传算法因子挖掘。
+
+使用 gplearn 的 SymbolicTransformer 挖掘因子表达式。
 """
 
 import sys
@@ -27,18 +27,15 @@ def mine_factors_with_gp(
 ) -> None:
     """使用遗传规划挖掘因子表达式。
 
-    Parameters:
-    -----------
-    market : str
-        股票池名称
-    start_date : str
-        开始日期 (YYYY-MM-DD)
-    end_date : str
-        结束日期 (YYYY-MM-DD)
-    provider_uri : str
-        Qlib数据目录
-    random_state : int
-        随机种子
+    Args:
+        market: 股票池名称
+        start_date: 开始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+        provider_uri: Qlib数据目录
+        random_state: 随机种子
+
+    Raises:
+        ValueError: 当特征或目标数据包含 NaN 时
     """
     if random_state is None:
         import random
@@ -72,13 +69,23 @@ def mine_factors_with_gp(
     features_df = features_df.groupby(level="instrument", group_keys=False).apply(
         lambda x: x.ffill().bfill()
     )
-    print(f"    特征数据: {features_df.shape}")
 
     print("  加载收益率数据...")
     ret_df = cache_mgr.read_dataframe("returns")
     ret_df = ret_df[["ret_1d"]]
     ret_df.columns = [DEFAULT_TARGET]
-    print(f"    收益率数据: {ret_df.shape}")
+
+    ret_df = features_df.join(ret_df, how="left")[[DEFAULT_TARGET]]
+
+    if features_df.isna().any().any():
+        nan_count = features_df.isna().sum()
+        raise ValueError(f"特征数据包含 NaN，请检查数据源:\n{nan_count[nan_count > 0]}")
+
+    if ret_df.isna().any().any():
+        nan_count = ret_df.isna().sum()
+        raise ValueError(
+            f"收益率数据包含 NaN，请检查数据源:\n{nan_count[nan_count > 0]}"
+        )
 
     print("  训练GP模型...")
     miner = FactorMiner(

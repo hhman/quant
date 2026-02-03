@@ -83,27 +83,10 @@ class FactorMiner:
         Returns:
             (X, y, index, boundaries)
         """
-        common_index = features_df.index.intersection(target_df.index)
+        index = features_df.index
 
-        if len(common_index) == 0:
-            raise ValueError("特征和目标变量索引无交集")
-
-        features_filtered = features_df.loc[common_index]
-        target_filtered = target_df.loc[common_index]
-
-        target_col = target_filtered.columns[0]
-        valid_mask = ~target_filtered[target_col].isna()
-
-        features_clean = features_filtered[valid_mask].fillna(0)
-        target_clean = target_filtered[valid_mask]
-
-        if len(target_clean) == 0:
-            raise ValueError("有效数据为空")
-
-        index = features_clean.index
-
-        X = flatten_features(features_clean)
-        y = flatten_target(target_clean)
+        X = flatten_features(features_df)
+        y = flatten_target(target_df)
         boundaries = calc_boundaries(index)
 
         return X, y, index, boundaries

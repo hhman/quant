@@ -95,14 +95,15 @@ core/gplearn/ (改进层，可修改)
 - 异常处理不足 → 使用 print 输出错误
 
 **保留的核心问题**（仍需解决）:
-- 数据清洗粗糙 (P0)
 - 适应度函数单一 (P0)
 - GP 参数过小 (P1)
-- 算子库不足 (P1)
+- 全局变量并发安全未验证 (P2)
 
-**已解决的问题** (V2.2):
-- 缺乏样本外验证 → 通过 Pipeline 架构解决
-- 缺乏后验分析 → 通过 Step1-4 复用解决
+**已解决的问题**:
+- ✅ 缺乏样本外验证 (P0) → 通过 Pipeline 架构解决
+- ✅ 数据清洗粗糙 (P0) → 职责分离 + join 对齐 + NaN 检测
+- ✅ 缺乏后验分析 (P0) → 通过 Step1-4 复用解决
+- ✅ 算子库不足 (P1) → 已完成 TA-Lib 集成
 
 ---
 
@@ -168,37 +169,34 @@ def run(self, features_df, target_df) -> List[str]:
 
 ---
 
-#### 问题2：数据清洗粗糙（严重程度：最高）
+#### 问题2：数据清洗粗糙（严重程度：最高）✅ 已解决
 
-**位置**: [core/gplearn/miner.py:95-119](../core/gplearn/miner.py)
+**位置**: [core/gplearn/miner.py:71-92](../core/gplearn/miner.py), [step5/genetic_algorithm_factor_mining.py:59-85](../step5/genetic_algorithm_factor_mining.py)
 
-**现状**:
+**解决时间**: 2026-02-03
+
+**解决方案**:
+1. **职责分离**: 数据清洗从 `core/gplearn/miner.py` 移至 `step5/genetic_algorithm_factor_mining.py`
+2. **索引对齐**: 使用 `join(how="left")` 确保 features 和 target 索引一致
+3. **NaN 检测**: 发现 NaN 立即抛出异常，不妥协
+4. **删除无效特征**: 移除数据源中为空的 `$vwap` 字段
+5. **简化清洗**: 使用 Qlib 的 `ffill().bfill()` 处理短期缺失
+
+**关键代码**:
 ```python
-# 数据清洗在 _prepare_data() 方法中
-features_clean = features_filtered[valid_mask].fillna(0)
+# step5: 索引对齐
+ret_df = features_df.join(ret_df, how="left")[[DEFAULT_TARGET]]
+
+# NaN 检测（立即失败）
+if features_df.isna().any().any():
+    raise ValueError(f"特征数据包含 NaN，请检查数据源")
+
+# miner.py: 直接 flatten，不做清洗
+X = flatten_features(features_df)
+y = flatten_target(target_df)
 ```
 
-**问题**:
-1. **停牌处理错误**: 长期停牌股票的 ffill 产生虚假价格
-2. **未处理极端值**: 没有 winsorize 或 MAD 处理
-3. **未处理成交量缺失**: 应该用 NaN 标记，而非删除
-
-**金融后果**:
-- 因子可能被虚假数据污染
-- 技术指标计算错误
-
-**解决方案**: 新建 data_cleaner.py
-```python
-def clean_features(features_df, target_df):
-    """标准数据清洗流程"""
-    # 1. 删除停牌超过 N 天的股票
-    # 2. 短期缺失 ffill（限制天数）
-    # 3. 极值处理（3σ + MAD）
-    # 4. 删除剩余 NaN
-    return features_clean, target_clean
-```
-
-**工作量**: 2-3 天
+**工作量**: 已完成
 
 ---
 

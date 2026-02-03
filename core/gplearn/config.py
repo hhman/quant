@@ -13,7 +13,6 @@ DEFAULT_FEATURES = [
     "$low",
     "$volume",
     "$amount",
-    "$vwap",
 ]
 
 DEFAULT_TARGET = "Ref($close, -1)/$close - 1"
@@ -29,21 +28,10 @@ class DataConfig:
     Attributes:
         features: 特征字段列表
         target: 目标字段表达式
-        fillna_price: 价格字段填充方式（ffill/zero/mean/drop）
-        fillna_volume: 成交量字段填充方式（ffill/zero/mean/drop）
-        price_columns: 价格字段列名列表
-        volume_columns: 成交量字段列名列表
     """
 
     features: List[str] = field(default_factory=lambda: DEFAULT_FEATURES)
     target: str = DEFAULT_TARGET
-    fillna_price: str = "ffill"
-    fillna_volume: str = "zero"
-
-    price_columns: List[str] = field(
-        default_factory=lambda: ["$close", "$open", "$high", "$low", "$vwap"]
-    )
-    volume_columns: List[str] = field(default_factory=lambda: ["$volume", "$amount"])
 
 
 # ==================== GP算法配置 ====================
