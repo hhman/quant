@@ -32,6 +32,15 @@ def get_index() -> pd.MultiIndex:
     return _index_global
 
 
+def has_index() -> bool:
+    """检查全局MultiIndex是否已设置。
+
+    Returns:
+        True if index is set, False otherwise
+    """
+    return _index_global is not None
+
+
 def set_boundary_indices(indices: List[int]) -> None:
     """设置全局边界索引。
 
@@ -84,6 +93,7 @@ def global_state(
 __all__ = [
     "set_index",
     "get_index",
+    "has_index",
     "set_boundary_indices",
     "get_boundary_indices",
     "clear_globals",

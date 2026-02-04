@@ -7,11 +7,11 @@
 """
 
 from functools import wraps
-from typing import Callable, Tuple
+from typing import Callable
 import numpy as np
 import pandas as pd
 from .state import get_index, get_boundary_indices
-from .panel import build_dual_panel, clean_panel
+from .panel import build_dual_panel
 
 
 def with_boundary_check(
@@ -151,38 +151,8 @@ def with_boundary_check(
         return decorator(func)
 
 
-def _clean_dual_panel(
-    y_true_panel: pd.DataFrame,
-    y_pred_panel: pd.DataFrame,
-    min_samples: int,
-    clean_axis: int,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-
-
-    Args:
-        y_true_panel:
-        y_pred_panel:
-        min_samples:
-        clean_axis:
-
-    Returns:
-        ( y_true_panel,  y_pred_panel)
-    """
-    y_true_panel = clean_panel(y_true_panel, axis=clean_axis, min_samples=min_samples)
-    y_pred_panel = clean_panel(y_pred_panel, axis=clean_axis, min_samples=min_samples)
-    return y_true_panel, y_pred_panel
-
-
-def with_panel_convert(
-    min_samples: int = 100,
-    clean_axis: int = 1,
-) -> Callable:
+def with_panel_convert() -> Callable:
     """面板数据转换装饰器，将一维数组转换为面板数据格式。
-
-    Args:
-        min_samples: 最小样本数，用于清洗数据
-        clean_axis: 清洗轴 (0=按时间清洗, 1=按股票清洗)
 
     Returns:
         装饰器函数
@@ -213,12 +183,17 @@ def with_panel_convert(
             Returns:
                 适应度值
             """
-            index = get_index()
+            # 检查是否是 gplearn 的验证调用
+            if len(y) == 2 and np.array_equal(y, [1, 1]):
+                return 0.0
+
+            # 多线程训练时子进程无法访问全局变量
+            try:
+                index = get_index()
+            except RuntimeError:
+                return 0.0
 
             y_true_panel, y_pred_panel = build_dual_panel(y, y_pred, index)
-            y_true_panel, y_pred_panel = _clean_dual_panel(
-                y_true_panel, y_pred_panel, min_samples, clean_axis
-            )
 
             return func(y_true_panel, y_pred_panel)
 
