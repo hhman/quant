@@ -275,7 +275,7 @@ def _adapt_to_gplearn_arity1(func: Callable, name: str) -> Callable:
     except ImportError:
         raise ImportError("请先安装gplearn: pip install gplearn")
 
-    return make_function(function=func, name=name, arity=1, wrap=False)
+    return make_function(function=func, name=name, arity=1, wrap=True)
 
 
 def _adapt_to_gplearn_arity2(func: Callable, name: str) -> Callable:
@@ -293,7 +293,7 @@ def _adapt_to_gplearn_arity2(func: Callable, name: str) -> Callable:
     except ImportError:
         raise ImportError("请先安装gplearn: pip install gplearn")
 
-    return make_function(function=func, name=name, arity=2, wrap=False)
+    return make_function(function=func, name=name, arity=2, wrap=True)
 
 
 def adapt_operator_to_gplearn(func: Callable, arity: int, name: str) -> Callable:
