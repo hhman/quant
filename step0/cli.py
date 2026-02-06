@@ -5,7 +5,7 @@ Step 0 CLI: 数据预处理 - 从原始CSV到Qlib格式
 """
 
 import argparse
-import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -43,8 +43,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def normalize_args(args: argparse.Namespace) -> dict:
-    """
-    校验和标准化参数
+    """校验和标准化参数。
 
     Args:
         args: 解析后的 CLI 参数
@@ -55,7 +54,6 @@ def normalize_args(args: argparse.Namespace) -> dict:
     Raises:
         ValueError: 当参数验证失败时
     """
-    # 验证日期范围
     start_date, end_date = parse_date_range(args.start_date, args.end_date)
 
     return {
@@ -65,8 +63,7 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 
 def run_command(cmd: str, description: str = "") -> None:
-    """
-    执行 shell 命令，失败时退出程序
+    """执行 shell 命令，失败时退出程序。
 
     Args:
         cmd: 要执行的命令字符串
@@ -75,9 +72,6 @@ def run_command(cmd: str, description: str = "") -> None:
     Raises:
         SystemExit: 当命令执行失败时
     """
-    if os.name == 'nt':
-        cmd = cmd.replace('cp "', 'copy "')
-    
     try:
         subprocess.run(
             cmd,
@@ -86,8 +80,25 @@ def run_command(cmd: str, description: str = "") -> None:
             capture_output=False,
             text=True,
         )
-    except subprocess.CalledProcessError:
-        print(f"命令执行失败: {description}")
+    except subprocess.CalledProcessError as e:
+        print(f"命令执行失败: {description} (退出码: {e.returncode})")
+        sys.exit(1)
+
+
+def copy_file(src: Path, dst: Path) -> None:
+    """跨平台文件复制。
+
+    Args:
+        src: 源文件路径
+        dst: 目标文件路径
+
+    Raises:
+        SystemExit: 当复制失败时
+    """
+    try:
+        shutil.copy2(src, dst)
+    except (OSError, IOError) as e:
+        print(f"文件复制失败: {src} -> {dst} - {e}")
         sys.exit(1)
 
 
@@ -160,15 +171,12 @@ def main():
 
     for txt_file in txt_files:
         dst_file = instruments_dst / txt_file.name
-        run_command(f'cp "{txt_file}" "{dst_file}"', description="复制membership文件")
+        copy_file(txt_file, dst_file)
 
     industry_mapping_src = output_dir / "industry_mapping.json"
     industry_mapping_dst = Path(cache_dir) / "industry_mapping.json"
     if industry_mapping_src.exists():
-        run_command(
-            f'cp "{industry_mapping_src}" "{industry_mapping_dst}"',
-            description="复制industry_mapping文件",
-        )
+        copy_file(industry_mapping_src, industry_mapping_dst)
 
     from step0.financial_data_pivot import process_financial_data
 
