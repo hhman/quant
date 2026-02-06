@@ -94,13 +94,8 @@ def evaluate_performance(
     )
     cache_mgr.write_dataframe(ic_df, "ic")
     cache_mgr.write_dataframe(ric_df, "rank_ic")
-    ic_summary.to_excel(
-        f".cache/{market}_{start_compact}_{end_compact}__ic_summary.xlsx", index=True
-    )
-    ric_summary.to_excel(
-        f".cache/{market}_{start_compact}_{end_compact}__rank_ic_summary.xlsx",
-        index=True,
-    )
+cache_mgr.write_summary(ic_summary, "ic")
+    cache_mgr.write_summary(ric_summary, "rank_ic")
     print(f"    ic: {ic_df.shape}, rank_ic: {ric_df.shape}")
 
     print("  计算分组收益...")
@@ -111,10 +106,7 @@ def evaluate_performance(
         quantile=0.2,
     )
     cache_mgr.write_dataframe(group_daily_df, "group_return")
-    group_summary.to_excel(
-        f".cache/{market}_{start_compact}_{end_compact}__group_return_summary.xlsx",
-        index=True,
-    )
+cache_mgr.write_summary(group_summary, "group_return")
     print(f"    group_return: {group_daily_df.shape}")
 
     print("  计算自相关...")
@@ -124,10 +116,7 @@ def evaluate_performance(
         lag=1,
     )
     cache_mgr.write_dataframe(ac_df, "autocorr")
-    ac_summary.to_excel(
-        f".cache/{market}_{start_compact}_{end_compact}__autocorr_summary.xlsx",
-        index=True,
-    )
+cache_mgr.write_summary(ac_summary, "autocorr")
     print(f"    autocorr: {ac_df.shape}")
 
     print("  计算换手率...")
@@ -138,10 +127,7 @@ def evaluate_performance(
         lag=1,
     )
     cache_mgr.write_dataframe(turnover_daily_df, "turnover")
-    turnover_summary.to_excel(
-        f".cache/{market}_{start_compact}_{end_compact}__turnover_summary.xlsx",
-        index=True,
-    )
+cache_mgr.write_summary(turnover_summary, "turnover")
     print(f"    turnover: {turnover_daily_df.shape}")
 
     print("\n  生成图表...")

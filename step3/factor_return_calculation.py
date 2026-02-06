@@ -181,12 +181,8 @@ def calculate_returns(
 
         start_compact = start_date.replace("-", "")
         end_compact = end_date.replace("-", "")
-        coef_summary.to_excel(
-            f".cache/{market}_{start_compact}_{end_compact}__return_coef_summary.xlsx"
-        )
-        t_summary.to_excel(
-            f".cache/{market}_{start_compact}_{end_compact}__return_tval_summary.xlsx"
-        )
+cache_mgr.write_summary(coef_summary, "return_coef")
+        cache_mgr.write_summary(t_summary, "return_tval")
         print("    Excel文件已保存")
 
         print("\nStep3完成!")

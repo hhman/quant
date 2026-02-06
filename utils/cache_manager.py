@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parquet缓存管理器，支持数据缓存、合并、读取和元数据管理。"""
+"""数据缓存管理器，支持数据缓存、合并、读取和元数据管理。"""
 
 from pathlib import Path
 from typing import Optional
@@ -411,6 +411,43 @@ class CacheManager:
             f.unlink()
 
         return len(files)
+
+def write_summary(
+        self,
+        df: pd.DataFrame,
+        data_type: str,
+        verbose: bool = True,
+    ) -> None:
+        """将DataFrame写入Excel摘要文件，支持增量更新。
+
+        Args:
+            df: 要写入的DataFrame
+            data_type: 数据类型
+            verbose: 是否输出详细信息
+        """
+        path = self.get_summary_path(data_type)
+        
+        if path.exists():
+            existing_df = pd.read_excel(path, index_col=0)
+            result_df = pd.concat([existing_df, df])
+            result_df = result_df[~result_df.index.duplicated(keep='last')]
+            result_df.to_excel(path)
+        else:
+            df.to_excel(path)
+
+    
+
+    def get_summary_path(self, data_type: str) -> Path:
+        """获取Excel摘要文件路径。
+
+        Args:
+            data_type: 数据类型
+
+        Returns:
+            Excel文件路径
+        """
+        filename = f"{self.market}_{self.start_date_compact}_{self.end_date_compact}__{data_type}_summary.xlsx"
+        return self.CACHE_DIR / filename
 
     def list_cache_files(self) -> list[Path]:
         """列出缓存目录中的所有Parquet文件。
