@@ -73,19 +73,31 @@ def neutralize_factors(
         print(f"  错误: 缺失列: {missing_cols}")
         sys.exit(1)
 
-    data_for_neutralize = pd.concat(
-        [factor_std[factor_cols], styles_df[required_style_cols]], axis=1
+    data = factor_std.join(styles_df, how="left")
+    
+    print(f"    合并后数据: {data.shape}")
+    print(
+        f"    因子股票数: {len(factor_std.index.get_level_values('instrument').unique())}"
     )
-
+    print(
+        f"    风格股票数: {len(styles_df.index.get_level_values('instrument').unique())}"
+    )
+    print(
+        f"    合并后股票数: {len(data.index.get_level_values('instrument').unique())}"
+    )
+    
+    needed_cols = factor_cols + required_style_cols
+    data = data[needed_cols]
+    
     print(f"    待中性化因子数: {len(factor_cols)}")
     print(f"    因子列: {factor_cols}")
     print(f"    风格列: {required_style_cols}")
 
     print("  执行中性化...")
     result_list = []
-    for dt in data_for_neutralize.index.get_level_values("datetime").unique():
+    for dt in data.index.get_level_values("datetime").unique():
         daily_group = (
-            data_for_neutralize.xs(dt, level="datetime")
+            data.xs(dt, level="datetime")
             .assign(datetime=dt)
             .set_index("datetime", append=True)
             .reorder_levels(["instrument", "datetime"])

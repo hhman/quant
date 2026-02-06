@@ -5,6 +5,7 @@ Step 0 CLI: 数据预处理 - 从原始CSV到Qlib格式
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -65,7 +66,7 @@ def normalize_args(args: argparse.Namespace) -> dict:
 
 def run_command(cmd: str, description: str = "") -> None:
     """
-    运行 shell 命令，出错时退出程序
+    执行 shell 命令，失败时退出程序
 
     Args:
         cmd: 要执行的命令字符串
@@ -74,6 +75,9 @@ def run_command(cmd: str, description: str = "") -> None:
     Raises:
         SystemExit: 当命令执行失败时
     """
+    if os.name == 'nt':
+        cmd = cmd.replace('cp "', 'copy "')
+    
     try:
         subprocess.run(
             cmd,
@@ -82,9 +86,9 @@ def run_command(cmd: str, description: str = "") -> None:
             capture_output=False,
             text=True,
         )
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(f"命令执行失败: {description}")
-        sys.exit(e.returncode)
+        sys.exit(1)
 
 
 def validate_input_directories() -> None:
