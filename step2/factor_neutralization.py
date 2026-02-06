@@ -74,7 +74,7 @@ def neutralize_factors(
         sys.exit(1)
 
     data = factor_std.join(styles_df, how="left")
-    
+
     print(f"    合并后数据: {data.shape}")
     print(
         f"    因子股票数: {len(factor_std.index.get_level_values('instrument').unique())}"
@@ -85,10 +85,10 @@ def neutralize_factors(
     print(
         f"    合并后股票数: {len(data.index.get_level_values('instrument').unique())}"
     )
-    
+
     needed_cols = factor_cols + required_style_cols
     data = data[needed_cols]
-    
+
     print(f"    待中性化因子数: {len(factor_cols)}")
     print(f"    因子列: {factor_cols}")
     print(f"    风格列: {required_style_cols}")

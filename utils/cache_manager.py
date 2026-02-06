@@ -412,7 +412,7 @@ class CacheManager:
 
         return len(files)
 
-def write_summary(
+    def write_summary(
         self,
         df: pd.DataFrame,
         data_type: str,
@@ -426,16 +426,14 @@ def write_summary(
             verbose: 是否输出详细信息
         """
         path = self.get_summary_path(data_type)
-        
+
         if path.exists():
             existing_df = pd.read_excel(path, index_col=0)
             result_df = pd.concat([existing_df, df])
-            result_df = result_df[~result_df.index.duplicated(keep='last')]
+            result_df = result_df[~result_df.index.duplicated(keep="last")]
             result_df.to_excel(path)
         else:
             df.to_excel(path)
-
-    
 
     def get_summary_path(self, data_type: str) -> Path:
         """获取Excel摘要文件路径。

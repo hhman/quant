@@ -179,9 +179,7 @@ def calculate_returns(
             {col: _t_summary(t_all[col]) for col in t_all.columns}
         ).T
 
-        start_compact = start_date.replace("-", "")
-        end_compact = end_date.replace("-", "")
-cache_mgr.write_summary(coef_summary, "return_coef")
+        cache_mgr.write_summary(coef_summary, "return_coef")
         cache_mgr.write_summary(t_summary, "return_tval")
         print("    Excel文件已保存")
 

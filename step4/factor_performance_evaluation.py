@@ -85,16 +85,13 @@ def evaluate_performance(
     factor_list = list(factor_df.columns)
     ret_list = list(ret_df.columns)
 
-    start_compact = start_date.replace("-", "")
-    end_compact = end_date.replace("-", "")
-
     print("  计算IC/RankIC...")
     ic_df, ric_df, ic_summary, ric_summary = summarize_ic(
         merged_df, factor_list=factor_list, ret_list=ret_list
     )
     cache_mgr.write_dataframe(ic_df, "ic")
     cache_mgr.write_dataframe(ric_df, "rank_ic")
-cache_mgr.write_summary(ic_summary, "ic")
+    cache_mgr.write_summary(ic_summary, "ic")
     cache_mgr.write_summary(ric_summary, "rank_ic")
     print(f"    ic: {ic_df.shape}, rank_ic: {ric_df.shape}")
 
@@ -106,7 +103,7 @@ cache_mgr.write_summary(ic_summary, "ic")
         quantile=0.2,
     )
     cache_mgr.write_dataframe(group_daily_df, "group_return")
-cache_mgr.write_summary(group_summary, "group_return")
+    cache_mgr.write_summary(group_summary, "group_return")
     print(f"    group_return: {group_daily_df.shape}")
 
     print("  计算自相关...")
@@ -116,7 +113,7 @@ cache_mgr.write_summary(group_summary, "group_return")
         lag=1,
     )
     cache_mgr.write_dataframe(ac_df, "autocorr")
-cache_mgr.write_summary(ac_summary, "autocorr")
+    cache_mgr.write_summary(ac_summary, "autocorr")
     print(f"    autocorr: {ac_df.shape}")
 
     print("  计算换手率...")
@@ -127,7 +124,7 @@ cache_mgr.write_summary(ac_summary, "autocorr")
         lag=1,
     )
     cache_mgr.write_dataframe(turnover_daily_df, "turnover")
-cache_mgr.write_summary(turnover_summary, "turnover")
+    cache_mgr.write_summary(turnover_summary, "turnover")
     print(f"    turnover: {turnover_daily_df.shape}")
 
     print("\n  生成图表...")
