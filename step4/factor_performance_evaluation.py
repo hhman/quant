@@ -129,7 +129,11 @@ def evaluate_performance(
 
     print("\n  生成图表...")
     try:
-        graphs_dir = Path(".cache") / "graphs"
+        start_compact = start_date.replace("-", "")
+        end_compact = end_date.replace("-", "")
+        graphs_dir = (
+            Path(".cache") / "graphs" / f"{market}_{start_compact}_{end_compact}"
+        )
         save_performance_graphs(
             merged_df=merged_df,
             factor_list=factor_list,
