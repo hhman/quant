@@ -12,6 +12,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from utils import info, error
+
 from utils.cli_args import parse_date_range
 
 
@@ -81,7 +83,7 @@ def run_command(cmd: str, description: str = "") -> None:
             text=True,
         )
     except subprocess.CalledProcessError as e:
-        print(f"命令执行失败: {description} (退出码: {e.returncode})")
+        error(f"命令执行失败: {description} (退出码: {e.returncode})")
         sys.exit(1)
 
 
@@ -98,7 +100,7 @@ def copy_file(src: Path, dst: Path) -> None:
     try:
         shutil.copy2(src, dst)
     except (OSError, IOError) as e:
-        print(f"文件复制失败: {src} -> {dst} - {e}")
+        error(f"文件复制失败: {src} -> {dst} - {e}")
         sys.exit(1)
 
 
@@ -117,7 +119,7 @@ def validate_input_directories() -> None:
 
     for dir_name, dir_desc in directories.items():
         if not Path(dir_name).exists():
-            print(f"{dir_desc}不存在: {dir_name}")
+            error(f"{dir_desc}不存在: {dir_name}")
             sys.exit(1)
 
 
@@ -149,7 +151,7 @@ def main():
         import shutil
 
         shutil.rmtree(qlib_dir)
-        print(f"删除旧数据: {qlib_dir}")
+        info(f"删除旧数据: {qlib_dir}")
 
     run_command(
         f'python "{qlib_src_dir}/scripts/dump_bin.py" dump_all '
@@ -166,7 +168,7 @@ def main():
 
     txt_files = list(instruments_src.glob("*.txt"))
     if not txt_files:
-        print(f"未找到成分股文件: {instruments_src}/*.txt")
+        error(f"未找到成分股文件: {instruments_src}/*.txt")
         sys.exit(1)
 
     for txt_file in txt_files:
@@ -215,7 +217,7 @@ def main():
         provider_uri=str(qlib_dir),
     )
 
-    print("Step0完成!")
+    info("Step0完成!")
 
 
 if __name__ == "__main__":

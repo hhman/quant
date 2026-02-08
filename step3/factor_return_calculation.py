@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 
 from utils.cache_manager import CacheManager
+from utils import info, warning, error
 from core.factor_analysis import factor_return_industry_marketcap
 
 
@@ -46,9 +47,9 @@ def calculate_returns(
     """
     cache_mgr = CacheManager(market, start_date, end_date)
 
-    print("\nStep3: 收益率计算")
+    info("\nStep3: 收益率计算")
 
-    print("  读取缓存...")
+    info("  读取缓存...")
     factor_std = cache_mgr.read_dataframe("factor_std")
     styles_df = cache_mgr.read_dataframe("styles")
     ret_df = cache_mgr.read_dataframe("returns")
@@ -56,23 +57,21 @@ def calculate_returns(
     data = factor_std.join(styles_df, how="left")
     data = data.join(ret_df, how="left")
 
-    print(f"    合并后数据: {data.shape}")
-    print(
+    info(f"    合并后数据: {data.shape}")
+    info(
         f"    因子股票数: {len(factor_std.index.get_level_values('instrument').unique())}"
     )
-    print(
+    info(
         f"    收益率股票数: {len(ret_df.index.get_level_values('instrument').unique())}"
     )
-    print(
-        f"    合并后股票数: {len(data.index.get_level_values('instrument').unique())}"
-    )
+    info(f"    合并后股票数: {len(data.index.get_level_values('instrument').unique())}")
 
     factor_cols = [col for col in factor_std.columns if col in factor_formulas]
     ret_cols = [col for col in ret_df.columns if col.startswith("ret_")]
 
     if not factor_cols:
-        print(f"  错误: 未找到因子 {factor_formulas} 在缓存中")
-        print(
+        error(f"  错误: 未找到因子 {factor_formulas} 在缓存中")
+        warning(
             f"  可用因子: {[col for col in factor_std.columns if col not in ['$total_mv', '$industry', '$float_mv']]}"
         )
         sys.exit(1)
@@ -82,17 +81,17 @@ def calculate_returns(
         col for col in ret_cols + required_style_cols if col not in data.columns
     ]
     if missing_cols:
-        print(f"  错误: 缺失列: {missing_cols}")
+        error(f"  错误: 缺失列: {missing_cols}")
         sys.exit(1)
 
     needed_cols = factor_cols + ret_cols + required_style_cols
     data = data[needed_cols]
 
-    print(f"    因子数: {len(factor_cols)}")
-    print(f"    收益率列数: {len(ret_cols)}")
-    print(f"    风格列: {required_style_cols}")
+    info(f"    因子数: {len(factor_cols)}")
+    info(f"    收益率列数: {len(ret_cols)}")
+    info(f"    风格列: {required_style_cols}")
 
-    print("  执行回归...")
+    info("  执行回归...")
     coef_list = []
     t_list = []
     for dt in data.index.get_level_values("datetime").unique():
@@ -119,10 +118,10 @@ def calculate_returns(
         t_all = pd.concat(t_list, axis=0)
 
         cache_mgr.write_dataframe(coef_all, "return_coef")
-        print(f"    return_coef: {coef_all.shape}")
+        info(f"    return_coef: {coef_all.shape}")
 
         cache_mgr.write_dataframe(t_all, "return_tval")
-        print(f"    return_tval: {t_all.shape}")
+        info(f"    return_tval: {t_all.shape}")
 
         def _coef_summary(series: pd.Series) -> pd.Series:
             """计算回归系数的统计摘要。
@@ -181,9 +180,9 @@ def calculate_returns(
 
         cache_mgr.write_summary(coef_summary, "return_coef")
         cache_mgr.write_summary(t_summary, "return_tval")
-        print("    Excel文件已保存")
+        info("    Excel文件已保存")
 
-        print("\nStep3完成!")
+        info("\nStep3完成!")
     else:
-        print("  错误: 回归结果为空")
+        error("  错误: 回归结果为空")
         sys.exit(1)

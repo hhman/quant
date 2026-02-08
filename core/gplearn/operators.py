@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import warnings
 
+from utils import warning
+
 from .common.registry import (
     register_operator,
     get_operator,
@@ -27,7 +29,7 @@ try:
     TALIB_AVAILABLE = True
 except ImportError:
     TALIB_AVAILABLE = False
-    print(": TA-Lib  TA-Lib ")
+    warning(": TA-Lib  TA-Lib ")
 
 
 #

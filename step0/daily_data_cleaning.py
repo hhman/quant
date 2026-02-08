@@ -7,6 +7,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from utils import info
+
 
 # =============================================================================
 # 数据结构定义
@@ -535,7 +537,7 @@ def process_stock_data(
     save_industry_mapping(industry_mapping, output_path)
     write_category_files(category_records, output_path)
 
-    print(
+    info(
         f"处理完成: 股票 {len(stock_results)}, 指数 {len(index_results)}, 行业 {len(industry_mapping)}"
     )
-    print(f"输出目录: {output_path}")
+    info(f"输出目录: {output_path}")

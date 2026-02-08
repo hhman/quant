@@ -5,6 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from utils import info
+
 import pandas as pd
 import qlib
 from qlib.constant import REG_CN
@@ -34,10 +36,10 @@ def calculate_returns_and_styles(
 
     cache_mgr = CacheManager("all", start_date, end_date)
 
-    print(f"初始化 Qlib: {provider_uri}")
+    info(f"初始化 Qlib: {provider_uri}")
     qlib.init(provider_uri=provider_uri, region=REG_CN)
 
-    print("\n计算收益率...")
+    info("\n计算收益率...")
     ret_map = {
         f"ret_{label}": f"Ref($close, -{lag})/$close - 1"
         for label, lag in periods.items()
@@ -57,11 +59,11 @@ def calculate_returns_and_styles(
     ret_df = ret_df[ret_df.index.get_level_values("datetime") <= pd.Timestamp(end_date)]
 
     cache_mgr.write_dataframe(ret_df, "returns")
-    print(
+    info(
         f"    returns: {ret_df.shape}, 股票数: {len(ret_df.index.get_level_values('instrument').unique())}"
     )
 
-    print("  计算风格因子...")
+    info("  计算风格因子...")
     all_instruments = D.instruments(market="all")
 
     total_mv = D.features(
@@ -99,7 +101,7 @@ def calculate_returns_and_styles(
 
     styles_df = pd.concat([total_mv, industry, float_mv], axis=1)
     cache_mgr.write_dataframe(styles_df, "styles")
-    print(f"    styles: {styles_df.shape}")
+    info(f"    styles: {styles_df.shape}")
 
-    print("\n完成!")
-    print(f"  Cache: {cache_mgr.CACHE_DIR}")
+    info("\n完成!")
+    info(f"  Cache: {cache_mgr.CACHE_DIR}")

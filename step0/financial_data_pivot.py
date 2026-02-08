@@ -5,6 +5,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from utils import info
+
 
 # =============================================================================
 #
@@ -177,4 +179,4 @@ def process_financial_data(
                 out_path, index=False, encoding=OUTPUT_ENCODING
             )
 
-    print(f"输出目录: {output_path}")
+    info(f"输出目录: {output_path}")

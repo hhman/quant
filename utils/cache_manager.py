@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 import pandas as pd
 
+from utils import info, warning
+
 
 class CacheManager:
     """Parquet缓存管理器。"""
@@ -156,14 +158,14 @@ class CacheManager:
         kept = merge_info["kept"]
 
         if replaced:
-            print(f"替换列 ({len(replaced)}): {replaced}")
+            info(f"替换列 ({len(replaced)}): {replaced}")
         if appended:
-            print(f"新增列 ({len(appended)}): {appended}")
+            info(f"新增列 ({len(appended)}): {appended}")
         if kept:
-            print(f"保留列 ({len(kept)}): {kept}")
+            info(f"保留列 ({len(kept)}): {kept}")
 
         if not replaced and not appended:
-            print("无需合并，数据未变更")
+            info("无需合并，数据未变更")
 
     def read_dataframe(
         self,
@@ -320,7 +322,7 @@ class CacheManager:
         }
 
         if verbose and missing_cols:
-            print(
+            warning(
                 f"列缺失:\n"
                 f"   缺失: {sorted(missing_cols)}\n"
                 f"   可用: {sorted(existing_cols)}"

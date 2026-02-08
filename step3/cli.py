@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from utils import info
 from utils.cli_args import (
     parse_date_range,
     validate_market,
@@ -91,7 +92,7 @@ def main():
 
     calculate_returns(**params)
 
-    print("Step3完成! 缓存位置: .cache/")
+    info("Step3完成! 缓存位置: .cache/")
 
 
 if __name__ == "__main__":

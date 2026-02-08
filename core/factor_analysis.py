@@ -4,6 +4,7 @@ import statsmodels.api as sm
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from utils import info, warning, error
 from qlib.contrib.eva.alpha import calc_ic, calc_long_short_return, pred_autocorr
 from qlib.contrib.report.analysis_model.analysis_model_performance import (
     model_performance_graph,
@@ -92,7 +93,7 @@ def neutralize_industry_marketcap(
         group[industry_col], drop_first=True, prefix=industry_col, dtype=float
     )
     if X_dummies.empty:
-        print(f"[neutralize_industry_marketcap] {dt} 行业虚拟变量为空")
+        warning(f"[neutralize_industry_marketcap] {dt} 行业虚拟变量为空")
 
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
@@ -115,13 +116,13 @@ def neutralize_industry_marketcap(
         if before_drop > 0:
             drop_ratio = (before_drop - len(reg_data)) / before_drop
             if drop_ratio > 0.1:
-                print(
+                warning(
                     f"[neutralize_industry_marketcap] {dt} {factor_name} dropna比例 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
                 )
 
         n_params = len(X_styles.columns) + 2
         if len(reg_data) < n_params:
-            print(
+            warning(
                 f"[neutralize_industry_marketcap] {dt} {factor_name} 样本不足 {len(reg_data)} < {n_params} 返回NaN"
             )
             continue
@@ -135,11 +136,11 @@ def neutralize_industry_marketcap(
             result.loc[residual.index, factor_name] = residual
 
             if model.rsquared < 0.1:
-                print(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
+                warning(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
             elif model.rsquared < 0.05:
-                print(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
+                warning(f"[neutralize] {dt} {factor_name} R²={model.rsquared:.3f}")
         except Exception as e:
-            print(
+            error(
                 f"[neutralize_industry_marketcap] {dt} {factor_name} 回归失败: {e} 返回NaN"
             )
 
@@ -189,7 +190,7 @@ def factor_return_industry_marketcap(
         group[industry_col], drop_first=True, prefix=industry_col, dtype=float
     )
     if X_dummies.empty:
-        print(f"[factor_return] {dt} 行业虚拟变量为空")
+        warning(f"[factor_return] {dt} 行业虚拟变量为空")
 
     X_styles = pd.concat([X_continuous, X_dummies], axis=1)
 
@@ -218,14 +219,14 @@ def factor_return_industry_marketcap(
             if before_drop > 0:
                 drop_ratio = (before_drop - len(reg_data)) / before_drop
                 if drop_ratio > 0.1:
-                    print(
+                    warning(
                         f"[factor_return] {dt} {factor_name}-{ret_col} dropna比例 {before_drop - len(reg_data)}/{before_drop} ({drop_ratio:.1%})"
                     )
 
             n_params = base_X.shape[1] + 1
             col_name = f"{factor_name}_{ret_col}"
             if len(reg_data) < n_params:
-                print(
+                warning(
                     f"[factor_return] {dt} 因子 {factor_name} 收益 {ret_col} 样本不足 {len(reg_data)} < {n_params} 返回NaN"
                 )
                 coef_row[col_name] = np.nan
@@ -242,11 +243,11 @@ def factor_return_industry_marketcap(
                 t_row[col_name] = model.tvalues.get(factor_name, np.nan)
 
                 if model.rsquared < 0.1:
-                    print(
+                    warning(
                         f"[factor_return] {dt} {factor_name}-{ret_col} R²={model.rsquared:.3f}"
                     )
             except Exception as e:
-                print(
+                error(
                     f"[factor_return] {dt} {factor_name} 收益 {ret_col} 回归失败: {e} 返回NaN"
                 )
                 coef_row[col_name] = np.nan
@@ -583,7 +584,7 @@ def save_performance_graphs(
                         )
                         fig.write_html(str(subdir / filename))
                 except Exception as e:
-                    print(
+                    error(
                         f"[save_performance_graphs] {factor_name}-{ret_col} {name}: {e}"
                     )
 
@@ -593,8 +594,8 @@ def save_performance_graphs(
                     name = "score_ic.html" if len(figs) == 1 else f"score_ic_{i}.html"
                     fig.write_html(str(subdir / name))
             except Exception as e:
-                print(
+                error(
                     f"[save_performance_graphs] {factor_name}-{ret_col} score_ic: {e}"
                 )
 
-    print(f"图表已保存: {out_dir}")
+    info(f"图表已保存: {out_dir}")

@@ -16,6 +16,7 @@ from qlib.data import D
 from core.gplearn import FactorMiner
 from core.gplearn.config import DEFAULT_FEATURES, DEFAULT_TARGET, get_fast_test_config
 from utils.cache_manager import CacheManager
+from utils import info
 
 
 def mine_factors_with_gp(
@@ -41,23 +42,23 @@ def mine_factors_with_gp(
         import random
 
         random_state = random.randint(0, 2**32 - 1)
-        print(f"  随机种子: {random_state}")
+        info(f"  随机种子: {random_state}")
 
-    print(f"初始化 Qlib: {provider_uri}")
+    info(f"初始化 Qlib: {provider_uri}")
     qlib.init(provider_uri=provider_uri, region=REG_CN)
 
     cache_mgr = CacheManager(market, start_date, end_date)
 
-    print("\nStep5: GP因子挖掘")
-    print(f"  市场: {market}")
-    print(f"  日期: {start_date} ~ {end_date}")
-    print(f"  特征数: {len(DEFAULT_FEATURES)}")
-    print(f"  目标: {DEFAULT_TARGET}")
-    print(f"  随机种子: {random_state}")
+    info("\nStep5: GP因子挖掘")
+    info(f"  市场: {market}")
+    info(f"  日期: {start_date} ~ {end_date}")
+    info(f"  特征数: {len(DEFAULT_FEATURES)}")
+    info(f"  目标: {DEFAULT_TARGET}")
+    info(f"  随机种子: {random_state}")
 
     instruments = D.instruments(market=market)
 
-    print("  加载特征数据...")
+    info("  加载特征数据...")
     features_df = D.features(
         instruments=instruments,
         fields=DEFAULT_FEATURES,
@@ -70,7 +71,7 @@ def mine_factors_with_gp(
         lambda x: x.ffill().bfill()
     )
 
-    print("  加载收益率数据...")
+    info("  加载收益率数据...")
     ret_df = cache_mgr.read_dataframe("returns")
     ret_df = ret_df[["ret_1d"]]
     ret_df.columns = [DEFAULT_TARGET]
@@ -87,7 +88,7 @@ def mine_factors_with_gp(
             f"收益率数据包含 NaN，请检查数据源:\n{nan_count[nan_count > 0]}"
         )
 
-    print("  训练GP模型...")
+    info("  训练GP模型...")
     miner = FactorMiner(
         features=DEFAULT_FEATURES,
         target=DEFAULT_TARGET,
@@ -97,7 +98,7 @@ def mine_factors_with_gp(
 
     expressions = miner.run(features_df, ret_df)
 
-    print("  保存结果...")
+    info("  保存结果...")
     output_dir = Path(".cache")
     output_dir.mkdir(exist_ok=True)
 
@@ -112,11 +113,11 @@ def mine_factors_with_gp(
         for expr in expressions:
             f.write(f"{expr}\n")
 
-    print(f"    表达式文件: {output_path}")
+    info(f"    表达式文件: {output_path}")
 
-    print(f"\n  共生成 {len(expressions)} 个因子:")
+    info(f"\n  共生成 {len(expressions)} 个因子:")
     for i, expr in enumerate(expressions, 1):
-        print(f"\n  Factor {i}:")
-        print(f"    {expr}")
+        info(f"\n  Factor {i}:")
+        info(f"    {expr}")
 
-    print("\nStep5完成!")
+    info("\nStep5完成!")
