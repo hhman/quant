@@ -8,10 +8,6 @@ import pandas as pd
 from utils import info
 
 
-# =============================================================================
-#
-# =============================================================================
-
 REQUIRED_COLUMNS = ("stock_code", "report_date", "publish_date")
 
 META_COLUMNS = (
@@ -26,11 +22,6 @@ OUTPUT_COLUMNS = ("stock_code", "date", "period", "field", "value")
 
 INPUT_ENCODING = "gbk"
 OUTPUT_ENCODING = "utf-8-sig"
-
-
-# =============================================================================
-#
-# =============================================================================
 
 
 def normalize_exchange_code(code: str) -> str:
@@ -110,29 +101,19 @@ def iter_csv_files(input_dir: Path) -> list[Path]:
     return []
 
 
-# =============================================================================
-#
-# =============================================================================
-
-
 def process_financial_data(
     start_date: str,
     end_date: str,
     finance_dir: str,
     output_dir: str,
 ) -> None:
-    """dump_pit.py
+    """处理财务数据并转换为长格式。
 
-    Parameters:
-    -----------
-    start_date : str
-         (YYYY-MM-DD)
-    end_date : str
-         (YYYY-MM-DD)
-    finance_dir : str
-         CSV
-    output_dir : str
-
+    Args:
+        start_date: 起始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+        finance_dir: 财务 CSV 数据目录
+        output_dir: 输出目录
     """
     input_path = Path(finance_dir)
     output_path = Path(output_dir)

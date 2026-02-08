@@ -27,22 +27,15 @@ def calculate_factors(
 ) -> None:
     """计算因子并保存到缓存。
 
-    Parameters:
-    -----------
-    market : str
-        股票池名称 (如 csi300)
-    start_date : str
-        开始日期 (YYYY-MM-DD)
-    end_date : str
-        结束日期 (YYYY-MM-DD)
-    factor_formulas : list[str]
-        因子表达式列表
-    provider_uri : str
-        Qlib数据目录
+    Args:
+        market: 股票池名称 (如 csi300)
+        start_date: 开始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+        factor_formulas: 因子表达式列表
+        provider_uri: Qlib数据目录
 
     Returns:
-    --------
-    None
+        None
     """
     cache_mgr = CacheManager(market, start_date, end_date)
 

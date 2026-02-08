@@ -13,7 +13,15 @@ from qlib.contrib.report.analysis_position import score_ic_graph
 
 
 def ext_out_mad(group: pd.DataFrame, factor_list: List[str]) -> pd.DataFrame:
-    """Median absolute deviation outlier removal."""
+    """中位数绝对偏差去极值。
+
+    Args:
+        group: MultiIndex (instrument, datetime) 的 DataFrame
+        factor_list: 需要处理的因子列名列表
+
+    Returns:
+        去极值后的 DataFrame
+    """
     for factor_name in factor_list:
         factor = group[factor_name]
         median = factor.median()
@@ -29,7 +37,16 @@ def ext_out_mad(group: pd.DataFrame, factor_list: List[str]) -> pd.DataFrame:
 def ext_out_3std(
     group: pd.DataFrame, factor_list: List[str], noise_std: float = 1e-10
 ) -> pd.DataFrame:
-    """3-sigma"""
+    """3-sigma 去极值。
+
+    Args:
+        group: MultiIndex (instrument, datetime) 的 DataFrame
+        factor_list: 需要处理的因子列名列表
+        noise_std: 添加的噪声标准差，防止除零
+
+    Returns:
+        去极值后的 DataFrame
+    """
     for factor_name in factor_list:
         factor = group[factor_name]
         noise = np.random.normal(0, noise_std, size=len(factor))
@@ -43,7 +60,15 @@ def ext_out_3std(
 
 
 def z_score(group: pd.DataFrame, factor_list: List[str]) -> pd.DataFrame:
-    """Z-score standardization."""
+    """Z-score 标准化。
+
+    Args:
+        group: MultiIndex (instrument, datetime) 的 DataFrame
+        factor_list: 需要标准化的因子列名列表
+
+    Returns:
+        标准化后的 DataFrame
+    """
     for factor_name in factor_list:
         factor = group[factor_name]
         if factor.std() != 0:

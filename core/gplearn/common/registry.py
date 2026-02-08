@@ -103,8 +103,6 @@ def get_meta(registry: Dict[str, Dict[str, Any]], name: str) -> Dict[str, Any]:
     return registry[name].copy()
 
 
-# ==================== 全局注册表 ====================
-
 _OPERATOR_REGISTRY = None
 _FITNESS_REGISTRY = None
 
@@ -123,9 +121,6 @@ def _get_fitness_registry() -> Dict[str, Dict[str, Any]]:
     if _FITNESS_REGISTRY is None:
         _FITNESS_REGISTRY = create_registry("Fitness")
     return _FITNESS_REGISTRY
-
-
-# ==================== 算子注册接口 ====================
 
 
 def register_operator(name: str, category: str = "time_series", **meta) -> Callable:
@@ -179,9 +174,6 @@ def _get_operator_meta(name: str) -> Dict[str, Any]:
     return get_meta(registry, name)
 
 
-# ==================== 适应度函数注册接口 ====================
-
-
 def register_fitness(name: str, stopping_criteria: float = None, **meta) -> Callable:
     """注册适应度函数。
 
@@ -233,9 +225,6 @@ def _get_fitness_meta(name: str) -> Dict[str, Any]:
     """
     registry = _get_fitness_registry()
     return get_meta(registry, name)
-
-
-# ==================== Gplearn 适配器 ====================
 
 
 def _validate_window_param(w: Any, default: int = 20) -> int:
@@ -318,9 +307,6 @@ def adapt_operator_to_gplearn(func: Callable, arity: int, name: str) -> Callable
         raise ValueError(f"不支持的arity: {arity}")
 
 
-# ==================== 算子导出 ====================
-
-
 def get_all_operators() -> List[Callable]:
     """获取所有已注册算子的gplearn格式列表。
 
@@ -338,9 +324,9 @@ def get_all_operators() -> List[Callable]:
     operator_names = list_operators()
 
     if not operator_names:
-        import warnings
+        from utils import warning
 
-        warnings.warn("没有已注册的算子")
+        warning("警告: 没有已注册的算子")
         return []
 
     operators = []
@@ -404,9 +390,6 @@ def get_operators_by_category(category: str) -> List[Callable]:
             operators.append(gplearn_func)
 
     return operators
-
-
-# ==================== 适应度函数导出 ====================
 
 
 def get_fitness(name: str, **kwargs) -> Callable:

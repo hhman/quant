@@ -4,8 +4,6 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
 
-# ==================== 默认配置 ====================
-
 DEFAULT_FEATURES = [
     "$close",
     "$open",
@@ -16,9 +14,6 @@ DEFAULT_FEATURES = [
 ]
 
 DEFAULT_TARGET = "Ref($close, -1)/$close - 1"
-
-
-# ==================== 数据配置 ====================
 
 
 @dataclass(frozen=True)
@@ -32,9 +27,6 @@ class DataConfig:
 
     features: List[str] = field(default_factory=lambda: DEFAULT_FEATURES)
     target: str = DEFAULT_TARGET
-
-
-# ==================== GP算法配置 ====================
 
 
 @dataclass(frozen=True)
@@ -108,9 +100,6 @@ class GPConfig:
         }
 
 
-# ==================== 配置工厂函数 ====================
-
-
 def get_fast_test_config() -> GPConfig:
     """获取快速测试配置（用于调试和测试）。
 
@@ -142,8 +131,6 @@ def get_production_config() -> GPConfig:
         tournament_size=10,
     )
 
-
-# ==================== 导出列表 ====================
 
 __all__ = [
     # 数据类

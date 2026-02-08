@@ -10,11 +10,6 @@ import pandas as pd
 from utils import info
 
 
-# =============================================================================
-# 数据结构定义
-# =============================================================================
-
-
 @dataclass
 class MembershipRecord:
     """成分股成员关系记录"""
@@ -36,10 +31,6 @@ class ProcessedResult:
     dataframe: pd.DataFrame
     filename: str
 
-
-# =============================================================================
-# 常量定义
-# =============================================================================
 
 REQUIRED_COLUMNS = (
     "股票代码",
@@ -125,11 +116,6 @@ OUTPUT_COLUMNS = (
 )
 
 MEMBERSHIP_DIR = "instruments"
-
-
-# =============================================================================
-# 辅助函数
-# =============================================================================
 
 
 def normalize_exchange_code(code: str) -> str:
@@ -340,22 +326,14 @@ def process_stock_file(
 ) -> tuple[str, pd.DataFrame] | None:
     """处理单个股票文件。
 
-    Parameters:
-    -----------
-    csv_path : Path
-        CSV 文件路径
-    start_date : pd.Timestamp
-        起始日期
-    end_date : pd.Timestamp
-        结束日期
-    category_records : dict
-        成分股记录字典（会被修改）
-    industry_mapping : dict
-        行业映射字典（会被修改）
+    Args:
+        csv_path: CSV 文件路径
+        start_date: 起始日期
+        end_date: 结束日期
+        category_records: 成分股记录字典（会被修改）
+        industry_mapping: 行业映射字典（会被修改）
 
     Returns:
-    --------
-    (symbol, dataframe) | None
         股票代码和处理后的 DataFrame
     """
     raw_df = pd.read_csv(
@@ -463,11 +441,6 @@ def save_industry_mapping(
     )
 
 
-# =============================================================================
-# 核心函数
-# =============================================================================
-
-
 def process_stock_data(
     start_date: str,
     end_date: str,
@@ -477,18 +450,12 @@ def process_stock_data(
 ) -> None:
     """处理股票日线数据：清洗、对齐并输出标准化结果。
 
-    Parameters:
-    -----------
-    start_date : str
-        起始日期 (YYYY-MM-DD)
-    end_date : str
-        结束日期 (YYYY-MM-DD)
-    stock_dir : str
-        股票 CSV 数据目录
-    index_dir : str
-        指数 CSV 数据目录
-    output_dir : str
-        输出目录
+    Args:
+        start_date: 起始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+        stock_dir: 股票 CSV 数据目录
+        index_dir: 指数 CSV 数据目录
+        output_dir: 输出目录
     """
     start_ts = pd.Timestamp(start_date)
     end_ts = pd.Timestamp(end_date)

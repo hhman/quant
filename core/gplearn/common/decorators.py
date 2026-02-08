@@ -1,9 +1,6 @@
-"""
+"""GP 装饰器模块。
 
-
-
--
--
+提供边界检查、面板数据转换等装饰器函数。
 """
 
 from functools import wraps
@@ -17,34 +14,31 @@ from .panel import build_dual_panel
 def with_boundary_check(
     func: Callable = None, *, window_size: int | None = 1
 ) -> Callable:
-    """
+    """边界检查装饰器。
 
+    WHY: GP 算子计算需要使用历史数据，边界位置样本不足会导致结果不可靠。
 
     Args:
-        func:
-        window_size:
-            - arity=1  20
-            - arity=2  10
-            - arity=2  None
-            - 1
+        func: 被装饰的函数
+        window_size: 窗口大小，None 表示不检查
 
     Returns:
+        装饰后的函数
 
-
-
-        # arity=1  window_size
+    Example:
+        # arity=1 使用 window_size
         @register_operator(name="sma_20", category="time_series", arity=1)
         @with_boundary_check(window_size=20)
         def sma_20(arr):
             return pd.Series(arr).rolling(20).mean().values
 
-        # arity=2  window_size
+        # arity=2 使用 window_size
         @register_operator(name="corr_10", category="time_series", arity=2)
         @with_boundary_check(window_size=10)
         def corr_10(arr1, arr2):
             return pd.Series(arr1).rolling(10).corr(pd.Series(arr2))
 
-        # arity=2  None
+        # arity=2 不使用边界检查
         @register_operator(name="add", category="basic", arity=2)
         @with_boundary_check(window_size=None)
         def op_add(arr1, arr2):
@@ -62,7 +56,6 @@ def with_boundary_check(
         """
         import inspect
 
-        # 获取函数参数个数
         sig = inspect.signature(f)
         n_params = len(
             [
@@ -72,7 +65,6 @@ def with_boundary_check(
             ]
         )
 
-        #  arity  wrapper
         if n_params == 1:
 
             @wraps(f)
@@ -87,7 +79,6 @@ def with_boundary_check(
                 """
                 result = f(arr)
 
-                # window_size=None 表示不进行边界检查
                 if window_size is None:
                     return result
 
@@ -121,7 +112,6 @@ def with_boundary_check(
                 """
                 result = f(arr1, arr2)
 
-                # window_size=None 表示不进行边界检查
                 if window_size is None:
                     return result
 

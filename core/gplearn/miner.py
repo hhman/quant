@@ -1,7 +1,7 @@
-"""
-GP
+"""GP 因子挖掘器模块。
 
- SymbolicTransformer
+提供基于遗传规划的因子表达式自动发现功能。
+使用 gplearn 的 SymbolicTransformer 实现。
 """
 
 import numpy as np
@@ -16,16 +16,14 @@ from .config import GPConfig
 try:
     from gplearn.genetic import SymbolicTransformer
 except ImportError:
-    raise ImportError(" gplearn: pip install gplearn")
+    raise ImportError("请先安装 gplearn: pip install gplearn")
 
 
 class FactorMiner:
-    """
+    """GP 因子挖掘器。
 
-
-
-    -  MultiIndex DataFrame
-    -
+    使用遗传规划从特征数据中自动发现因子表达式。
+    接受 MultiIndex (instrument, datetime) 格式的输入数据。
     """
 
     def __init__(
@@ -54,15 +52,14 @@ class FactorMiner:
         features_df: pd.DataFrame,
         target_df: pd.DataFrame,
     ) -> List[str]:
-        """
-         +
+        """执行 GP 训练并返回因子表达式。
 
         Args:
-            features_df: (n_samples, n_features) MultiIndex DataFrame
-            target_df: (n_samples, 1) MultiIndex DataFrame
+            features_df: 特征数据，MultiIndex (instrument, datetime)
+            target_df: 目标数据，MultiIndex (instrument, datetime)
 
         Returns:
-
+            因子表达式字符串列表
         """
         X, y, index, boundaries = self._prepare_data(features_df, target_df)
         self._train(X, y, index, boundaries)
@@ -73,15 +70,18 @@ class FactorMiner:
         features_df: pd.DataFrame,
         target_df: pd.DataFrame,
     ) -> Tuple[np.ndarray, np.ndarray, pd.MultiIndex, List[int]]:
-        """
-         GP
+        """准备 GP 训练所需的扁平化数据。
 
         Args:
-            features_df: (n_samples, n_features) MultiIndex DataFrame
-            target_df: (n_samples, 1) MultiIndex DataFrame
+            features_df: 特征数据，MultiIndex (instrument, datetime)
+            target_df: 目标数据，MultiIndex (instrument, datetime)
 
         Returns:
             (X, y, index, boundaries)
+            - X: 特征数组
+            - y: 目标数组
+            - index: MultiIndex
+            - boundaries: 边界索引列表
         """
         index = features_df.index
 
@@ -117,17 +117,16 @@ class FactorMiner:
         index: pd.MultiIndex,
         boundaries: List[int],
     ) -> SymbolicTransformer:
-        """
-
+        """设置 GP 训练环境并创建 SymbolicTransformer。
 
         Args:
-            X:
-            y:
+            X: 特征数组
+            y: 目标数组
             index: MultiIndex
-            boundaries:
+            boundaries: 边界索引列表
 
         Returns:
-            SymbolicTransformer
+            配置好的 SymbolicTransformer 实例
         """
         with global_state(index, boundaries):
             function_set = get_all_operators()

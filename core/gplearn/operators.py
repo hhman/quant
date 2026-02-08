@@ -1,12 +1,11 @@
-"""
-Gplearn
+"""GP 算子模块。
 
-
+提供 GP 因子挖掘所需的基础算子和时间序列算子。
+包括基础数学运算、滚动统计、TA-Lib 技术指标、横截面算子等。
 """
 
 import numpy as np
 import pandas as pd
-import warnings
 
 from utils import warning
 
@@ -21,18 +20,15 @@ from .common.registry import (
 from .common.decorators import with_boundary_check, with_panel_builder
 
 
-# ==================== TA-Lib  ====================
-
 try:
     import talib
 
     TALIB_AVAILABLE = True
 except ImportError:
     TALIB_AVAILABLE = False
-    warning(": TA-Lib  TA-Lib ")
+    warning("警告: TA-Lib 未安装，部分算子将使用纯 Python 实现")
 
 
-#
 WINDOWS_SHORT = [5, 10]
 WINDOWS_MEDIUM = [20, 60]
 WINDOWS_LONG = [120, 250]
@@ -49,7 +45,16 @@ def _create_talib_operator(
     multi_output_index: int | None = None,
     **kwargs: object,
 ) -> None:
-    """TA-Lib arity=1"""
+    """创建 TA-Lib 算子函数并注册。
+
+    Args:
+        name: 算子名称
+        talib_func: TA-Lib 函数
+        window: 窗口大小
+        category: 算子类别
+        multi_output_index: 多输出索引（TA-Lib 返回元组时使用）
+        **kwargs: 传递给 TA-Lib 的额外参数
+    """
     if not TALIB_AVAILABLE:
         return
 
@@ -73,15 +78,8 @@ def _create_talib_operator(
                 result = result[multi_output_index]
             return np.nan_to_num(result, nan=0.0)
         except Exception as e:
-            warnings.warn(
-                f"TA-Lib  {name} : {type(e).__name__}: {str(e)}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
+            warning(f"TA-Lib 算子 {name} 执行失败: {type(e).__name__}: {str(e)}")
             return np.zeros_like(arr, dtype=float)
-
-
-# ====================  ====================
 
 
 @register_operator(name="abs", category="basic", arity=1)
@@ -134,9 +132,6 @@ def op_sign(arr: np.ndarray) -> np.ndarray:
         符号数组（-1, 0, 1）
     """
     return np.sign(arr)
-
-
-# ==================== arity=2====================
 
 
 @register_operator(name="add", category="basic", arity=2)
@@ -199,11 +194,10 @@ def op_div(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
     return np.divide(arr1, arr2 + 1e-10)
 
 
-# ==================== arity=1====================
-
-
 def _create_sma_operator(name: str, window: int) -> None:
-    """创建简单移动平均算子。
+    """创建简单移动平均算子并注册。
+
+    优先使用 TA-Lib 实现，否则回退到 pandas 实现。
 
     Args:
         name: 算子名称
@@ -223,7 +217,9 @@ def _create_sma_operator(name: str, window: int) -> None:
 
 
 def _create_ema_operator(name: str, window: int) -> None:
-    """创建指数移动平均算子。
+    """创建指数移动平均算子并注册。
+
+    优先使用 TA-Lib 实现，否则回退到 pandas 实现。
 
     Args:
         name: 算子名称
@@ -243,7 +239,9 @@ def _create_ema_operator(name: str, window: int) -> None:
 
 
 def _create_std_operator(name: str, window: int) -> None:
-    """创建滚动标准差算子。
+    """创建滚动标准差算子并注册。
+
+    优先使用 TA-Lib 实现，否则回退到 pandas 实现。
 
     Args:
         name: 算子名称
@@ -263,7 +261,9 @@ def _create_std_operator(name: str, window: int) -> None:
 
 
 def _create_delta_operator(name: str, window: int) -> None:
-    """创建差分算子。
+    """创建差分算子并注册。
+
+    计算 arr[t] - arr[t-window]。
 
     Args:
         name: 算子名称
@@ -280,7 +280,7 @@ def _create_delta_operator(name: str, window: int) -> None:
 
 
 def _create_max_operator(name: str, window: int) -> None:
-    """创建滚动最大值算子。
+    """创建滚动最大值算子并注册。
 
     Args:
         name: 算子名称
@@ -297,7 +297,7 @@ def _create_max_operator(name: str, window: int) -> None:
 
 
 def _create_min_operator(name: str, window: int) -> None:
-    """创建滚动最小值算子。
+    """创建滚动最小值算子并注册。
 
     Args:
         name: 算子名称
@@ -314,7 +314,9 @@ def _create_min_operator(name: str, window: int) -> None:
 
 
 def _create_ts_rank_operator(name: str, window: int) -> None:
-    """创建时间序列排名算子。
+    """创建时间序列排名算子并注册。
+
+    计算当前值在滚动窗口内的排名百分比。
 
     Args:
         name: 算子名称
@@ -333,7 +335,6 @@ def _create_ts_rank_operator(name: str, window: int) -> None:
         return result
 
 
-#
 for w in ALL_WINDOWS:
     _create_sma_operator(f"sma_{w}", w)
     _create_ema_operator(f"ema_{w}", w)
@@ -346,11 +347,10 @@ for w in WINDOWS_SHORT + WINDOWS_MEDIUM:
     _create_ts_rank_operator(f"ts_rank_{w}", w)
 
 
-# ==================== arity=2====================
-
-
 def _create_corr_operator(name: str, window: int) -> None:
-    """创建相关性算子函数。
+    """创建滚动相关性算子并注册。
+
+    计算两个数组的滚动相关系数。
 
     Args:
         name: 算子名称
@@ -382,15 +382,11 @@ def _create_corr_operator(name: str, window: int) -> None:
         return np.nan_to_num(result, nan=0.0)
 
 
-#  corr
 for w in [10, 20]:
     _create_corr_operator(f"corr_{w}", w)
 
 
-# ====================  TA-Lib arity=1====================
-
 if TALIB_AVAILABLE:
-    #
     for w in WINDOWS_RSI:
         _create_talib_operator(f"rsi_{w}", talib.RSI, w, "momentum")
 
@@ -399,7 +395,6 @@ if TALIB_AVAILABLE:
         _create_talib_operator(f"rocp_{w}", talib.ROCP, w, "momentum")
         _create_talib_operator(f"mom_{w}", talib.MOM, w, "momentum")
 
-    #
     for w in WINDOWS_SHORT + WINDOWS_MEDIUM:
         _create_talib_operator(f"wma_{w}", talib.WMA, w, "trend")
 
@@ -431,7 +426,6 @@ if TALIB_AVAILABLE:
         signalperiod=9,
     )
 
-    #
     for w in [20]:
         _create_talib_operator(
             f"bbands_upper_{w}", talib.BBANDS, w, "volatility", 0, nbdevup=2, nbdevdn=2
@@ -442,9 +436,6 @@ if TALIB_AVAILABLE:
         _create_talib_operator(
             f"bbands_lower_{w}", talib.BBANDS, w, "volatility", 2, nbdevup=2, nbdevdn=2
         )
-
-
-# ====================  ====================
 
 
 @register_operator(name="rank", category="cross_sectional", arity=1)

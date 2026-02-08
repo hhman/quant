@@ -34,22 +34,15 @@ def evaluate_performance(
 ) -> None:
     """评估因子绩效指标（IC、分组收益、自相关、换手率等）。
 
-    Parameters:
-    -----------
-    market : str
-        股票池名称
-    start_date : str
-        开始日期 (YYYY-MM-DD)
-    end_date : str
-        结束日期 (YYYY-MM-DD)
-    factor_formulas : list[str]
-        因子公式列表
-    provider_uri : str
-        Qlib数据目录
+    Args:
+        market: 股票池名称
+        start_date: 开始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+        factor_formulas: 因子公式列表
+        provider_uri: Qlib数据目录
 
     Returns:
-    --------
-    None
+        None
     """
     cache_mgr = CacheManager(market, start_date, end_date)
 

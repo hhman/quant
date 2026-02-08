@@ -1,16 +1,12 @@
-"""
-Gplearn
+"""GP 适应度函数模块。
 
-
+提供因子挖掘所需的适应度函数，使用 Rank IC 作为评价指标。
 """
 
 import pandas as pd
 
 from .common.registry import register_fitness, get_fitness, list_registered_fitness
 from .common.decorators import with_panel_convert
-
-
-# ====================  ====================
 
 
 @register_fitness(name="rank_ic", stopping_criteria=0.03)
